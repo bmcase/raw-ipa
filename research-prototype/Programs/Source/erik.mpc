@@ -212,21 +212,19 @@ def main():
 
     # Now do the sort
     # Radix sort
+    sorter = {BIT_RADIX_SORT: lambda mbits, mkeys, reps:
+              bit_radix_sort(mbits, reps),
+              RADIX_SORT: lambda mbits, mkeys, reps:
+              new_radix_sort(mkeys, reps, n_bits = args.n_bits),
+              BATCHER_SORT: lambda mbits, mkeys, reps:
+              print_ln("Batcher not implemented")}
 
     if args.do_sort:
 
-        if args.sort_type == BIT_RADIX_SORT:
-            bit_radix_sort(match_bits, reports)
-        else:
-            if args.sort_type == RADIX_SORT:
-        
-                new_radix_sort(match_keys, reports,
-                               n_bits = args.n_bits)
-        else:
-            if args.sort_type == BATCHER_SORT:
-                pass
-        else:
-            print(f"Illegal sort type {args.sort_type}")
+        sort_fn = sorter.get(args.sort_type,
+                             lambda mbits, mkeys, reps:
+                             print_ln("Illegal sort type"))
+        sort_fn(match_bits, match_keys, reports)
 
     breakdown_key_sums = oblivious_attribution(match_keys, reports,
                                                args.breakdown_values)
