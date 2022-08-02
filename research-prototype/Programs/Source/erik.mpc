@@ -15,6 +15,7 @@ BREAKDOWN_KEY = 2
 RADIX_SORT = 0
 BIT_RADIX_SORT = 1
 BATCHER_SORT = 2
+LIBRARY_SORT = 3
 
 def set_directory() -> None:
 
@@ -54,9 +55,10 @@ def get_args(args) -> argparse.Namespace:
     arg_parser.add_argument("n_bits", type = int, default = 32,
                             nargs = '?',
                             help="n_bits?")
-    arg_parser.add_argument("sort_type", type = int, default = 0,
+    arg_parser.add_argument("sort_type", type = int,
+                            default = LIBRARY_SORT,
                             nargs = '?',
-                            help="sort_type: 0 - radix, 1 - bit radix, 2 - batcher")
+                            help="sort_type")
     arg_parser.add_argument("do_sort", type = int, default = 1,
                             nargs = '?',
                             help="Sort the match keys")
@@ -188,7 +190,7 @@ def main():
     """
 
     set_directory()
-    from bsort import bit_radix_sort, new_radix_sort
+    from asort import bit_radix_sort, radix_sort
     args = get_args(program.args[1: ])
     print(f"args = {args}")
 
@@ -213,9 +215,11 @@ def main():
     # Now do the sort
     # Radix sort
     sorter = {BIT_RADIX_SORT: lambda mbits, mkeys, reps:
-              bit_radix_sort(mbits, reps),
+              bit_radix_sort(mbits.transpose(), reps),
+              LIBRARY_SORT: lambda mbits, mkeys, reps:
+              sorting.radix_sort(mkeys, reps, n_bits = args.n_bits),
               RADIX_SORT: lambda mbits, mkeys, reps:
-              new_radix_sort(mkeys, reps, n_bits = args.n_bits),
+              radix_sort(mkeys, reps, n_bits = args.n_bits),
               BATCHER_SORT: lambda mbits, mkeys, reps:
               print_ln("Batcher not implemented")}
 
