@@ -8,9 +8,10 @@ from typing import Optional
 from pathlib import Path
 from Compiler import types, library, instructions, sorting
 
-VALUE = 0
-IS_TRIGGER = 1
-BREAKDOWN_KEY = 2
+MATCH_KEYS = 0
+VALUE = 1
+IS_TRIGGER = 2
+BREAKDOWN_KEY = 3
 
 RADIX_SORT = 0
 BIT_RADIX_SORT = 1
@@ -64,16 +65,12 @@ def get_args(args) -> argparse.Namespace:
                             help="Sort the match keys")
     return arg_parser.parse_args(args)
 
-# Do this where the columns are separate
-# This will allow us to use match_keys as a bit array
-def oblivious_attribution(match_keys: Array,
-                          reports: Matrix,
+def oblivious_attribution(reports: Matrix,
                           breakdown_values: int) -> Optional[Array]:
     """
     Perform the oblivious attribution.
     """
 
-    assert len(match_keys) == len(reports)
     numrows, _  = reports.sizes
 
     # Edge cases: imagine that the match-keys are extended at either
@@ -81,6 +78,7 @@ def oblivious_attribution(match_keys: Array,
     # That means that helperbits[0] = 0
     # and that stopbits at the end are zeroed out
     helperbits = Array(numrows, sint)
+    match_keys = reports.get_column(MATCH_KEYS)
     helperbits.assign_vector(match_keys.get_vector(size = numrows - 1)
                              == match_keys.get_vector(base = 1,
                                                       size = numrows - 1),
@@ -198,39 +196,27 @@ def main():
 
     # load the data
 
-    match_keys = Array(numrows, sint)
-    
-    match_bits = Matrix(numrows, args.n_bits, sint)
-    if args.sort_type == BIT_RADIX_SORT:
-        match_bits.assign_vector(
-            sint.get_input_from(0, size = numrows * args.n_bits))
-        match_keys.assign_vector(reconstruct(match_bits))
-    else:
+    reports = Matrix(numrows, 4, sint)
+    reports.assign_vector(sint.get_input_from(0, size = numrows * 4))
 
-        match_keys.assign_vector(sint.get_input_from(0, size = numrows))
-
-    reports = Matrix(numrows, 3, sint)
-    reports.assign_vector(sint.get_input_from(0, size = numrows * 3))
-
+    match_keys = reports.get_column(MATCH_KEYS)
     # Now do the sort
     # Radix sort
-    sorter = {BIT_RADIX_SORT: lambda mbits, mkeys, reps:
-              bit_radix_sort(mbits.transpose(), reps),
-              LIBRARY_SORT: lambda mbits, mkeys, reps:
-              sorting.radix_sort(mkeys, reps, n_bits = args.n_bits),
-              RADIX_SORT: lambda mbits, mkeys, reps:
+    sorter = {LIBRARY_SORT: lambda mkeys, reps:
+              sorting.radix_sort(mkeys, reports, n_bits = args.n_bits),
+              RADIX_SORT: lambda mkeys, reps:
               radix_sort(mkeys, reps, n_bits = args.n_bits),
-              BATCHER_SORT: lambda mbits, mkeys, reps:
-              print_ln("Batcher not implemented")}
+              BATCHER_SORT: lambda mkeys, reps:
+              print("Batcher not implemented")}
 
     if args.do_sort:
 
         sort_fn = sorter.get(args.sort_type,
-                             lambda mbits, mkeys, reps:
-                             print_ln("Illegal sort type"))
-        sort_fn(match_bits, match_keys, reports)
+                             lambda mkeys, reps:
+                             print(f"Illegal sort type {args.sort_type}"))
+        sort_fn(match_keys, reports)
 
-    breakdown_key_sums = oblivious_attribution(match_keys, reports,
+    breakdown_key_sums = oblivious_attribution(reports,
                                                args.breakdown_values)
 
     if breakdown_key_sums is not None:

@@ -34,13 +34,17 @@ def dest_comp(B):
     return Tt
 
 def reveal_sort(k, D, reverse=False):
+    """
+    k is a permutation.
+    Rearrange D by k.
+    """
     assert len(k) == len(D)
     library.break_point()
     shuffle = types.sint.get_secure_shuffle(len(k))
     k_prime = k.get_vector().secure_permute(shuffle).reveal()
     idx = types.Array.create_from(k_prime)
-    if reverse:
-        D.assign_vector(D.get_slice_vector(idx))
+    if D:
+        reverse.assign_vector(D.get_slice_vector(idx))
         library.break_point()
         D.secure_permute(shuffle, reverse=True)
     else:
@@ -51,6 +55,60 @@ def reveal_sort(k, D, reverse=False):
     library.break_point()
     instructions.delshuffle(shuffle)
 
+def double_dest(bs):
+    """
+    bs is an n by 2 bit array.
+    """
+    num, _ = bs.sizes
+    bits = types.sint.Array(num * 4)
+    col0 = bs.get_column(0)
+    col1 = bs.get_column(1)
+    prod = col0 * col1
+    cum.assign_vector(prod - col0 - col1 + 1) # 00
+    cum.assign_vector(col1 - prod, base = num) # 01
+    cum.assign_vector(col0 - prod, base = 2 * num) # 10
+    cum.assign_vector(prod, base = 3 * num) # 11
+    @library.for_range(len(B) - 1)
+    def _(i):
+        cum[i + 1] = cum[i + 1] + cum[i]
+    one_contrib = cum.get_vector(size = num)
+    col0_contrib = (cum.get_vector(base = 2 * num, size = num)
+                    - one_contrib)
+    col1_contrib = (cum.get_vector(base = num, size = num)
+                    - one_contrib)
+    prod_contrib = (one_contrib
+                    + cum.get_vector(base = 3 * num, size = num))
+    return (one_contrib
+            + col0 * col0_contrib
+            + col1 * col1_contrib
+            + prod * prod_contrib -1)
+    
+def double_bit_radix_sort(bs, D):
+    """
+    Use two bits at a time.
+
+    There's an annoying problem if n_bits is odd.
+    """
+    n_bits, num = bs.sizes
+    h = types.Array.create_from(types.sint(types.regint.inc(num)))
+    # Test if n_bits is odd
+    @library.for_range(n_bits // 2)
+    def _(i):
+        perm = double_dest(bs[2 * i: 2 * i + 2])
+        reveal_sort(perm, h, reverse = False)
+        @library.if_e(2 * i + 3 < n_bits)
+        def _(): # sort the next 2 bits
+            reveal_sort(h, bs[2 * i + 2: 2 * i + 4], reverse = True)
+        @library.else_
+        def _():
+            @library.if_(n_bits % 2 == 1)
+            def odd_case():
+                reveal_sort(h, bs[-1], reverse == True)
+                c = types.Array.create_from(dest_comp(bs[-1]))
+                reveal_sort(c, h, reverse=False)
+    # Now take care of the odd case
+    reveal_sort(h, D, reverse == True)
+            
 def bit_radix_sort(bs, D):
 
     n_bits, num = bs.sizes
