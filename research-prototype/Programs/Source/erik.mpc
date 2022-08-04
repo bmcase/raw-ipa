@@ -66,7 +66,7 @@ def get_args(args) -> argparse.Namespace:
     return arg_parser.parse_args(args)
 
 def oblivious_attribution(reports: Matrix,
-                          breakdown_values: int) -> Optional[Array]:
+                          breakdown_values: int) -> Array:
     """
     Perform the oblivious attribution.
     """
@@ -154,33 +154,30 @@ def oblivious_attribution(reports: Matrix,
         credit.assign_vector(new_credit)
 
     # Calculate final_credits
-    if breakdown_values:
+    breakdown = reports.get_column(BREAKDOWN_KEY)
 
-        breakdown = reports.get_column(BREAKDOWN_KEY)
+    # Once we have AND, XOR is just addition and subtraction
 
-        # Once we have AND, XOR is just addition and subtraction
-
-        helperbits_xor_istrigger = (helperbits
-                                    + is_trigger.get_vector()
-                                    - helperbits_and_istrigger)
-
-        final_credits = helperbits_xor_istrigger * credit
+    helperbits_xor_istrigger = (helperbits
+                                + is_trigger.get_vector()
+                                - helperbits_and_istrigger)
+    
+    final_credits = helperbits_xor_istrigger * credit
         
-        breakdown_keys = list(range(breakdown_values))
+    breakdown_keys = list(range(breakdown_values))
 
-        breakdown_key_sums = Array(breakdown_values, sint)
+    breakdown_key_sums = Array(breakdown_values, sint)
 
-        for breakdown_key in breakdown_keys:
+    for breakdown_key in breakdown_keys:
 
-            # max[idx] = 1 if breakdown[idx] == breakdown_key, 0 otherwise
-            mask = breakdown == breakdown_key
-            # Sum up the final_credits for this breakdown
-            # We can do this with sum, but tree_reduce is more efficient.
-            breakdown_key_sums[breakdown_key] = tree_reduce(lambda x,y: x + y,
+        # max[idx] = 1 if breakdown[idx] == breakdown_key, 0 otherwise
+        mask = breakdown == breakdown_key
+        # Sum up the final_credits for this breakdown
+        # We can do this with sum, but tree_reduce is more efficient.
+        breakdown_key_sums[breakdown_key] = tree_reduce(lambda x,y: x + y,
                                                             mask * final_credits)
-            return breakdown_key_sums
 
-        return None
+    return breakdown_key_sums
 
 def main():
     """
@@ -218,9 +215,7 @@ def main():
 
     breakdown_key_sums = oblivious_attribution(reports,
                                                args.breakdown_values)
-
-    if breakdown_key_sums is not None:
-        print_ln("breakdowns: %s", breakdown_key_sums.reveal())
+    print_ln("breakdowns: %s", breakdown_key_sums.reveal())
     
 main()
 
