@@ -157,10 +157,11 @@ def oblivious_attribution(reports: Matrix,
         flag = (stopbit.get_vector(size = new_size)
                 & helperbits_and_istrigger.get_vector(base = stepsize,
                                                      size = new_size))
-        new_credit = (credit.get_vector(size = new_size)
-                      + flag
-                      * credit.get_vector(base = stepsize,
-                                          size = new_size))
+        # Replace the first new_size elements, leaving the others alone
+        credit.assign_vector(credit.get_vector(size = new_size)
+                             + flag
+                             * credit.get_vector(base = stepsize,
+                                                 size = new_size))
         stopbit.assign_vector(flag
                               & stopbit.get_vector(base = stepsize,
                                                    size = new_size))
@@ -168,9 +169,6 @@ def oblivious_attribution(reports: Matrix,
         # stopbit.get_vector(base = new_size, size = stepsize).assign_all(0)
         stopbit.assign_vector(zeros.get_vector(size = stepsize),
                               base = new_size)
-
-        # Replace the first new_size elements, leaving the others alone
-        credit.assign_vector(new_credit)
 
     # Calculate final_credits
     breakdown = reports.get_column(BREAKDOWN_KEY)
@@ -182,21 +180,19 @@ def oblivious_attribution(reports: Matrix,
 
     # It would be better to use the formula
     # x XOR y = x + y - 2 * x * y since we alaready know x*y
-    helperbits_xor_istrigger = (helperbits.get_vector()
-                                ^ is_trigger.get_vector())
+    # helperbits_xor_istrigger = (helperbits.get_vector()
+    #                             ^ is_trigger.get_vector())
 
-    
-    final_credits = helperbits_xor_istrigger * credit
-
-    breakdown_keys = list(range(breakdown_values))
+    final_credits = (1 - is_trigger.get_vector()) * credit
+    # final_credits = helperbits_xor_istrigger * credit
 
     # One can use sum, but tree_reduce appears to be more efficient
     return (
-        Array(breakdown_values, sint).create_from([
+        Array.create_from([
             tree_reduce(operator.add,
                         (breakdown == breakdown_key)
                         * credit)
-            for breakdown_key in breakdown_keys])
+            for breakdown_key in range(breakdown_values)])
     )
 
 def main():
@@ -235,6 +231,7 @@ def main():
 
     breakdown_key_sums = oblivious_attribution(reports,
                                                args.breakdown_values)
+
     print_ln("breakdowns: %s", breakdown_key_sums.reveal())
     
 main()

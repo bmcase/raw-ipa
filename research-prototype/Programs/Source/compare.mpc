@@ -23,20 +23,6 @@ def set_directory() -> None:
     source_dir = os.getcwd() + '/Programs/Source'
     sys.path = [source_dir] + sys.path
 
-def reconstruct(bit_array: Matrix) -> Array:
-    """
-    bit_array is an N by B array of bits
-    compute the integer representation.
-    This should only involve scalar multiplies and adds.
-    """
-
-    num, n_bits = bit_array.sizes
-    result = Array(num, sint)
-    result.assign_vector(bit_array.get_column(n_bits - 1))
-    for ind in range(n_bits - 2, -1, -1):
-        result = result + result + bit_array.get_column(ind)
-    return result
-
 def get_args(args) -> argparse.Namespace:
     """
     Get the arguments from the remainder of compile.py command line.
@@ -81,9 +67,11 @@ def oblivious_attribution(reports: Matrix,
 
     @for_range_opt(numrows - 1)
     def _(ind):
-        helperbits[ind] = reports[ind][MATCH_KEYS] == reports[ind + 1][MATCH_KEYS]
+        helperbits[ind] = (reports[ind][MATCH_KEYS]
+                           == reports[ind + 1][MATCH_KEYS])
 
     helperbits[0] = 0
+
     # helperbits[idx] = True if there's a transition to a new match key
 
     # is_trigger[idx] = True means this is a trigger even
@@ -91,26 +79,25 @@ def oblivious_attribution(reports: Matrix,
     # with trigger events with the same matchkey
     helperbits_and_istrigger = Array(numrows, sint)
 
-    @for_range_opt
+    @for_range_opt(numrows)
     def _(ind):
-        helperbits_and_istrigger[ind] = helperbits[ind] * reports[ind][ IS_TRIGGER]
-
-    # Prepare
-
+        helperbits_and_istrigger[ind] = (helperbits[ind]
+                                         * reports[ind][IS_TRIGGER])
     stopbit = Array(numrows, sint)
     credit = Array(numrows, sint)
     
     @for_range_opt(numrows - 1)
     def _(ind):
-        stopbit[ind] = helperbits_and_istrigger[i + 1]
+        stopbit[ind] = helperbits_and_istrigger[ind + 1]
 
     stopbit[numrows - 1] = 0
 
     @for_range_opt(numrows - 1)
     def _(ind):
-        credit[ind] = (reports[ind, VALUE] +
-                       stopbit[ind] * reports[ind + 1, VALUE])
-    credit[numrows - 1] = reports[numrows - 1, VALUE]
+        credit[ind] = (reports[ind][VALUE] +
+                       stopbit[ind] * reports[ind + 1][VALUE])
+
+    credit[numrows - 1] = reports[numrows - 1][VALUE]
 
     stepsize = 1
     flag = Array(numrows, sint)
@@ -130,7 +117,7 @@ def oblivious_attribution(reports: Matrix,
         new_size = numrows - stepsize
 
         @for_range_opt(new_size)
-        def _():
+        def _(ind):
             flag = stopbit[ind] * helperbits_and_istrigger[ind + stepsize]
 
             new_credit[ind] = (credit[ind] + flag
@@ -142,40 +129,40 @@ def oblivious_attribution(reports: Matrix,
         def _(ind):
             stopbit[ind + new_size] = 0
 
-        @for_range_opt(numrows)
+        @for_range_opt(new_size)
         def _(ind):
             credit[ind] = new_credit[ind]
-
-    # Calculate final_credits
-    breakdown = reports.get_column(BREAKDOWN_KEY)
 
     # Once we have AND, XOR is just addition and subtraction
 
     helperbits_xor_istrigger = Array(numrows, sint)
     # Note if x,y are 0/1 valued then
     # x XOR y = x + y - 2 * x*y
-    @for_range_opt
+    @for_range_opt(numrows)
     def _(ind):
         helperbits_xor_istrigger[ind] = (helperbits[ind] +
-                                         reports[ind, IS_TRIGGER]
+                                         reports[ind][IS_TRIGGER]
                                          -2 * helperbits_and_istrigger[ind])
-        
 
-    final_credits = helperbits_xor_istrigger * credit
-        
-    breakdown_keys = list(range(breakdown_values))
+    final_credits = Array(numrows, sint)
+    
+    @for_range_opt(numrows)
+    def _(ind):
+        final_credits[ind] = helperbits_xor_istrigger[ind] * credit[ind]
 
     breakdown_key_sums = Array(breakdown_values, sint)
 
-    for breakdown_key in breakdown_keys:
+    for breakdown_key in range(breakdown_values):
+        result = sint(0)
 
-        # max[idx] = 1 if breakdown[idx] == breakdown_key, 0 otherwise
-        mask = breakdown == breakdown_key
-        # Sum up the final_credits for this breakdown
-        # We can do this with sum, but tree_reduce is more efficient.
-        breakdown_key_sums[breakdown_key] = tree_reduce(lambda x,y: x + y,
-                                                            mask * final_credits)
+        @for_range(numrows)
+        def _(ind):
+            mask = reports[ind][BREAKDOWN_KEY] == breakdown_key
+            contrib = mask * final_credits[ind]
+            global result
+            result += contrib
 
+        breakdown_key_sums[breakdown_key] = result
     return breakdown_key_sums
 
 def main():
@@ -193,11 +180,15 @@ def main():
     # load the data
 
     reports = Matrix(numrows, 4, sint)
-    reports.assign_vector(sint.get_input_from(0, size = numrows * 4))
+    @for_range_opt(numrows)
+    def _(ind):
+        reports[ind][MATCH_KEYS] = sint.get_input_from(0)
+        reports[ind][IS_TRIGGER] = sint.get_input_from(0)
+        reports[ind][VALUE] = sint.get_input_from(0)
+        reports[ind][BREAKDOWN_KEY] = sint.get_input_from(0)
 
-    match_keys = reports.get_column(MATCH_KEYS)
     # Now do the sort
-    # Radix sort
+
     sorter = {LIBRARY_SORT: lambda mkeys, reps:
               sorting.radix_sort(mkeys, reports, n_bits = args.n_bits),
               RADIX_SORT: lambda mkeys, reps:
@@ -214,6 +205,7 @@ def main():
 
     breakdown_key_sums = oblivious_attribution(reports,
                                                args.breakdown_values)
+
     print_ln("breakdowns: %s", breakdown_key_sums.reveal())
     
 main()
