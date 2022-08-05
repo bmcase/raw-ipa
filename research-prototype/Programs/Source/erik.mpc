@@ -168,7 +168,8 @@ def oblivious_attribution(reports: Matrix,
         # stopbit.get_vector(base = new_size, size = stepsize).assign_all(0)
         stopbit.assign_vector(zeros.get_vector(size = stepsize),
                               base = new_size)
-            
+
+        # Replace the first new_size elements, leaving the others alone
         credit.assign_vector(new_credit)
 
     # Calculate final_credits
