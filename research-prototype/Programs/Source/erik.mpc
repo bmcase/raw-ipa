@@ -4,19 +4,24 @@ Rewriting Erik's mpc files using vectors
 import argparse
 import os
 import sys
-from typing import Optional
+from typing import Optional, Tuple
+import operator
 from pathlib import Path
 from Compiler import types, library, instructions, sorting
 
 MATCH_KEYS = 0
-VALUE = 1
-IS_TRIGGER = 2
+VALUE = 2
+IS_TRIGGER = 1
 BREAKDOWN_KEY = 3
 
 RADIX_SORT = 0
 BIT_RADIX_SORT = 1
 BATCHER_SORT = 2
 LIBRARY_SORT = 3
+
+def print_property(fun, vec, msg):
+
+    print_ln("%s: %s", msg, tree_reduce(operator.add,fun(vec)).reveal())
 
 def set_directory() -> None:
 
@@ -36,6 +41,17 @@ def reconstruct(bit_array: Matrix) -> Array:
     for ind in range(n_bits - 2, -1, -1):
         result = result + result + bit_array.get_column(ind)
     return result
+
+def validate_bits(arr: Array) -> Tuple[sint, sint]:
+    """
+    Test a purported bit vector.
+    """
+
+    small = arr.get_vector() < 0
+    big = arr.get_vector() > 1
+
+    return (tree_reduce(operator.add, small),
+            tree_reduce(operator.add, big))
 
 def get_args(args) -> argparse.Namespace:
     """
@@ -77,8 +93,9 @@ def oblivious_attribution(reports: Matrix,
     # end with keys that are different than any of the real keys
     # That means that helperbits[0] = 0
     # and that stopbits at the end are zeroed out
-    helperbits = Array(numrows, sint)
+    helperbits = Array(numrows, sintbit)
     match_keys = reports.get_column(MATCH_KEYS)
+
     helperbits.assign_vector(match_keys.get_vector(size = numrows - 1)
                              == match_keys.get_vector(base = 1,
                                                       size = numrows - 1),
@@ -89,9 +106,9 @@ def oblivious_attribution(reports: Matrix,
     # is_trigger[idx] = True means this is a trigger even
     # we want to match all non-trigger events (i.e. source events)
     # with trigger events with the same matchkey
-
-    is_trigger = reports.get_column(IS_TRIGGER)
-    helperbits_and_istrigger = helperbits * is_trigger.get_vector()
+    is_trigger = Array(numrows, sintbit)
+    is_trigger.assign_vector(reports.get_column(IS_TRIGGER))
+    helperbits_and_istrigger = helperbits.get_vector() & is_trigger.get_vector()
     
     # I think that the exponent refers to the depth in a binary tree.
 
@@ -104,9 +121,10 @@ def oblivious_attribution(reports: Matrix,
     # Problem: stopbit is the wrong size.
 
     # Initialize for results after the first pass
-    stopbit = Array(numrows, sint)
+    stopbit = Array(numrows, sintbit)
     credit = Array(numrows, sint)
     repval = reports.get_column(VALUE)
+
 
     stopbit.assign_vector(helperbits_and_istrigger.get_vector(base = 1,
                                                               size = numrows - 1))
@@ -118,7 +136,7 @@ def oblivious_attribution(reports: Matrix,
                          * repval.get_vector(base = 1,
                                              size = numrows - 1))
     
-    zeros = Array(numrows // 2, sint)
+    zeros = Array(numrows // 2, sintbit)
     zeros.assign_all(0)
 
     stepsize = 1
@@ -137,14 +155,14 @@ def oblivious_attribution(reports: Matrix,
         new_size = numrows - stepsize
 
         flag = (stopbit.get_vector(size = new_size)
-                * helperbits_and_istrigger.get_vector(base = stepsize,
+                & helperbits_and_istrigger.get_vector(base = stepsize,
                                                      size = new_size))
         new_credit = (credit.get_vector(size = new_size)
                       + flag
                       * credit.get_vector(base = stepsize,
                                           size = new_size))
         stopbit.assign_vector(flag
-                              * stopbit.get_vector(base = stepsize,
+                              & stopbit.get_vector(base = stepsize,
                                                    size = new_size))
         # Now 0 out the last stepsize stopbit's
         # stopbit.get_vector(base = new_size, size = stepsize).assign_all(0)
@@ -158,26 +176,27 @@ def oblivious_attribution(reports: Matrix,
 
     # Once we have AND, XOR is just addition and subtraction
 
-    helperbits_xor_istrigger = (helperbits
-                                + is_trigger.get_vector()
-                                - helperbits_and_istrigger)
+    # helperbits_xor_istrigger = (helperbits + is_trigger
+    #                             - 2 * helperbits_and_istrigger)
+
+    # It would be better to use the formula
+    # x XOR y = x + y - 2 * x * y since we alaready know x*y
+    helperbits_xor_istrigger = (helperbits.get_vector()
+                                ^ is_trigger.get_vector())
+
     
     final_credits = helperbits_xor_istrigger * credit
-        
+
     breakdown_keys = list(range(breakdown_values))
 
-    breakdown_key_sums = Array(breakdown_values, sint)
-
-    for breakdown_key in breakdown_keys:
-
-        # max[idx] = 1 if breakdown[idx] == breakdown_key, 0 otherwise
-        mask = breakdown == breakdown_key
-        # Sum up the final_credits for this breakdown
-        # We can do this with sum, but tree_reduce is more efficient.
-        breakdown_key_sums[breakdown_key] = tree_reduce(lambda x,y: x + y,
-                                                            mask * final_credits)
-
-    return breakdown_key_sums
+    # One can use sum, but tree_reduce appears to be more efficient
+    return (
+        Array(breakdown_values, sint).create_from([
+            tree_reduce(operator.add,
+                        (breakdown == breakdown_key)
+                        * credit)
+            for breakdown_key in breakdown_keys])
+    )
 
 def main():
     """
