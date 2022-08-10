@@ -18,18 +18,19 @@ def get_args(args):
                         help = "Power of 2 of # of inputs")
     return parser.parse_args(args)
 
-def process(numrows_power: int,
+def process(fname: str,
+            numrows_power: int,
             modulus: int = 2 ** 31,
             mkmod: int = 2 ** 8,
             breakdown_keys: int = 4):
     lines = 0
-    with open(Path(fname + '.csv', 'r')) as fil:
+    with open(Path(fname + '.csv'), 'r') as fil:
         for line in reader(fil):
             lines += 1
-            yield ' '.join(line)
+            yield line
     numrows = 2 ** numrows_power
 
-    yield from ([0,0,0,0] for _ in range(lines, numrows))
+    yield from (map(str,[0,0,0,0]) for _ in range(lines, numrows))
 
 def main():
 
@@ -39,7 +40,9 @@ def main():
     player_data.mkdir(parents = True, exist_ok = True)
 
     with open(player_data / 'Input-P0-0', 'w') as fil:
-        fil.write('\n'.join((' '.join(map(str,_)) for _ in process(args.numrows_power))))
+        fil.write('\n'.join((' '.join(_)
+                             for _ in process(args.data,
+                                              args.numrows_power))))
         
 
 main()
