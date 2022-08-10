@@ -110,9 +110,12 @@ def bit_radix_sort(bs, D):
         def _():
             sorting.reveal_sort(h, D, reverse=True)
 
-def radix_sort(k, D, n_bits=None, signed=True):
+def radix_sort(k, D, n_bits=None, signed=True, two_bit = False):
     assert len(k) == len(D)
     bs = types.Matrix.create_from(k.get_vector().bit_decompose(n_bits))
     if signed and len(bs) > 1:
         bs[-1][:] = bs[-1][:].bit_not()
-    bit_radix_sort(bs, D)
+    if two_bit:
+        double_bit_radix_sort(bs, D)
+    else:
+        bit_radix_sort(bs, D)
