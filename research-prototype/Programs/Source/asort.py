@@ -1,5 +1,5 @@
 import itertools
-from Compiler import types, library, instructions
+from Compiler import types, library, instructions, sorting
 
 def dest_comp(B):
     """
@@ -28,32 +28,12 @@ def dest_comp(B):
         St_flat[i + 1] = St_flat[i + 1] + St_flat[i]
     cumval = St_flat.get_vector(size = num)
     cumshift = St_flat.get_vector(base = num, size = num) - cumval
-    dest = cumval + Bt_flat.get_vector(base = num, size = num) * cumshift - 1
+    dest = (cumval 
+            + (Bt_flat.get_vector(base = num, size = num)
+               * cumshift))
     Tt = types.Array(num, B.value_type)
-    Tt.assign_vector(dest)
+    Tt.assign_vector(dest - 1) # Make 0-origin
     return Tt
-
-def reveal_sort(k, D, reverse=False):
-    """
-    k is a permutation.
-    Rearrange D by k.
-    """
-    assert len(k) == len(D)
-    library.break_point()
-    shuffle = types.sint.get_secure_shuffle(len(k))
-    k_prime = k.get_vector().secure_permute(shuffle).reveal()
-    idx = types.Array.create_from(k_prime)
-    if D:
-        reverse.assign_vector(D.get_slice_vector(idx))
-        library.break_point()
-        D.secure_permute(shuffle, reverse=True)
-    else:
-        D.secure_permute(shuffle)
-        library.break_point()
-        v = D.get_vector()
-        D.assign_slice_vector(idx, v)
-    library.break_point()
-    instructions.delshuffle(shuffle)
 
 def double_dest(bs):
     """
@@ -95,23 +75,25 @@ def double_bit_radix_sort(bs, D):
     @library.for_range(n_bits // 2)
     def _(i):
         perm = double_dest(bs[2 * i: 2 * i + 2])
-        reveal_sort(perm, h, reverse = False)
+        sorting.reveal_sort(perm, h, reverse = False)
         @library.if_e(2 * i + 3 < n_bits)
         def _(): # sort the next 2 bits
-            reveal_sort(h, bs[2 * i + 2: 2 * i + 4], reverse = True)
+            sorting.reveal_sort(h, bs[2 * i + 2: 2 * i + 4], reverse = True)
         @library.else_
         def _():
             @library.if_(n_bits % 2 == 1)
             def odd_case():
-                reveal_sort(h, bs[-1], reverse == True)
+                sorting.reveal_sort(h, bs[-1], reverse == True)
                 c = types.Array.create_from(dest_comp(bs[-1]))
-                reveal_sort(c, h, reverse=False)
+                sorting.reveal_sort(c, h, reverse=False)
     # Now take care of the odd case
-    reveal_sort(h, D, reverse == True)
+    sorting.reveal_sort(h, D, reverse == True)
             
 def bit_radix_sort(bs, D):
 
     n_bits, num = bs.sizes
+    assert num == len(D)
+    assert n_bits == len(bs)
     B = types.sint.Matrix(num, 2)
     h = types.Array.create_from(types.sint(types.regint.inc(num)))
     @library.for_range(n_bits)
@@ -120,13 +102,13 @@ def bit_radix_sort(bs, D):
         B.set_column(0, 1 - b.get_vector())
         B.set_column(1, b.get_vector())
         c = types.Array.create_from(dest_comp(B))
-        reveal_sort(c, h, reverse=False)
+        sorting.reveal_sort(c, h, reverse=False)
         @library.if_e(i < n_bits - 1)
         def _():
-            reveal_sort(h, bs[i + 1], reverse=True)
+            sorting.reveal_sort(h, bs[i + 1], reverse=True)
         @library.else_
         def _():
-            reveal_sort(h, D, reverse=True)
+            sorting.reveal_sort(h, D, reverse=True)
 
 def radix_sort(k, D, n_bits=None, signed=True):
     assert len(k) == len(D)
