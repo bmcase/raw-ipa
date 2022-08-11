@@ -240,14 +240,14 @@ def main():
                              print(f"Illegal sort type {args.sort_type}"))
         sort_fn(match_keys, reports)
         match_keys = reports.get_column(MATCH_KEYS)
-        misplaced = check_sorted(match_keys)
-        print_ln("mis sorted = %s", misplaced)
-        print_ln("len(match_keys) = %s", len(match_keys))
-        if len(reports) < 64:
-            @for_range(len(reports))
-            def _(i):
-                print_ln("%s: %s", i,
-                         reports[i].reveal())
+        # misplaced = check_sorted(match_keys)
+        # print_ln("mis sorted = %s", misplaced)
+        # print_ln("len(match_keys) = %s", len(match_keys))
+        # if len(reports) < 64:
+        #     @for_range(len(reports))
+        #     def _(i):
+        #         print_ln("%s: %s", i,
+        #                  reports[i].reveal())
 
     breakdown_key_sums = oblivious_attribution(reports,
                                                args.breakdown_values)
