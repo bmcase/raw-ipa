@@ -15,6 +15,7 @@ IS_TRIGGER = 1
 BREAKDOWN_KEY = 3
 
 RADIX_SORT = 0
+TWO_BIT_RADIX_SORT = 4
 BIT_RADIX_SORT = 1
 BATCHER_SORT = 2
 LIBRARY_SORT = 3
@@ -219,6 +220,8 @@ def main():
               sorting.radix_sort(mkeys, reports, n_bits = args.n_bits),
               RADIX_SORT: lambda mkeys, reps:
               radix_sort(mkeys, reps, n_bits = args.n_bits),
+              TWO_BIT_RADIX_SORT: lambda mkeys, reps:
+              radix_sort(mkeys, reps, n_bits = args.n_bits, two_bit = True),
               BATCHER_SORT: lambda mkeys, reps:
               print("Batcher not implemented")}
 
