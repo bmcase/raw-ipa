@@ -54,6 +54,14 @@ def validate_bits(arr: Array) -> Tuple[sint, sint]:
     return (tree_reduce(operator.add, small),
             tree_reduce(operator.add, big))
 
+def check_sorted(arr: Array) -> cint:
+    num = len(arr)
+
+    misplaced = (arr.get_vector(size = num - 1)
+                 > arr.get_vector(base = 1, size = num - 1))
+
+    return tree_reduce(operator.add, misplaced).reveal()
+
 def get_args(args) -> argparse.Namespace:
     """
     Get the arguments from the remainder of compile.py command line.
@@ -231,6 +239,7 @@ def main():
                              lambda mkeys, reps:
                              print(f"Illegal sort type {args.sort_type}"))
         sort_fn(match_keys, reports)
+        print_ln("mis sorted = %s", check_sorted(reports.get_column(MATCH_KEYS)))
 
     breakdown_key_sums = oblivious_attribution(reports,
                                                args.breakdown_values)
