@@ -35,20 +35,22 @@ def dest_comp(B):
     Tt.assign_vector(dest - 1) # Make 0-origin
     return Tt
 
-def double_dest(bs):
+def double_dest(col0, col1):
     """
     bs is an n by 2 bit array.
     """
-    num, _ = bs.sizes
-    bits = types.sint.Array(num * 4)
-    col0 = bs.get_column(0)
-    col1 = bs.get_column(1)
+    num = len(col0)
+    assert num == len(col1)
+    # num, _ = bs.sizes
+    cum = types.sint.Array(num * 4)
+    # col0 = bs.get_column(0)
+    # col1 = bs.get_column(1)
     prod = col0 * col1
     cum.assign_vector(prod - col0 - col1 + 1) # 00
     cum.assign_vector(col1 - prod, base = num) # 01
     cum.assign_vector(col0 - prod, base = 2 * num) # 10
     cum.assign_vector(prod, base = 3 * num) # 11
-    @library.for_range(len(B) - 1)
+    @library.for_range(len(cum) - 1)
     def _(i):
         cum[i + 1] = cum[i + 1] + cum[i]
     one_contrib = cum.get_vector(size = num)
@@ -74,20 +76,27 @@ def double_bit_radix_sort(bs, D):
     # Test if n_bits is odd
     @library.for_range(n_bits // 2)
     def _(i):
-        perm = double_dest(bs[2 * i: 2 * i + 2])
+        perm = double_dest(bs[2 * i].get_vector(),
+                           bs[2 * i + 1].get_vector())
         sorting.reveal_sort(perm, h, reverse = False)
         @library.if_e(2 * i + 3 < n_bits)
         def _(): # sort the next 2 bits
-            sorting.reveal_sort(h, bs[2 * i + 2: 2 * i + 4], reverse = True)
+            # It would be nice if slice behaved
+            bot = (2 * i + 2) * num
+            tmp = types.Matrix(num, 2, bs.value_type)
+            tmp.assign_vector(bs.get_vector(base = bot, size = 2 * num))
+            
+            sorting.reveal_sort(h, tmp, reverse = True)
+            bs.assign_vector(tmp.get_vector(), base = bot)
         @library.else_
         def _():
             @library.if_(n_bits % 2 == 1)
             def odd_case():
-                sorting.reveal_sort(h, bs[-1], reverse == True)
+                sorting.reveal_sort(h, bs[-1], reverse = True)
                 c = types.Array.create_from(dest_comp(bs[-1]))
                 sorting.reveal_sort(c, h, reverse=False)
     # Now take care of the odd case
-    sorting.reveal_sort(h, D, reverse == True)
+    sorting.reveal_sort(h, D, reverse = True)
             
 def bit_radix_sort(bs, D):
 
