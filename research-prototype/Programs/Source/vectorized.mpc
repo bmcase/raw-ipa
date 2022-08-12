@@ -19,6 +19,7 @@ BIT_RADIX_SORT = 1
 BATCHER_SORT = 2
 LIBRARY_SORT = 3  # we used this for PATCG benchmarks 
 TWO_BIT_RADIX_SORT = 4 # this is @algebravic's optimized version
+THREE_BIT_RADIX_SORT = 5
 
 def print_property(fun, vec, msg):
 
@@ -293,7 +294,9 @@ def main():
               RADIX_SORT: lambda mkeys, reps:
               radix_sort(mkeys, reps, n_bits = args.n_bits),
               TWO_BIT_RADIX_SORT: lambda mkeys, reps:
-              radix_sort(mkeys, reps, n_bits = args.n_bits, two_bit = True),
+              radix_sort(mkeys, reps, n_bits = args.n_bits, chunk = 2),
+              THREE_BIT_RADIX_SORT: lambda mkeys, reps:
+              radix_sort(mkeys, reps, n_bits = args.n_bits, chunk = 3),
               BATCHER_SORT: lambda mkeys, reps:
               print("Batcher not implemented")}
 
@@ -305,9 +308,11 @@ def main():
                              lambda mkeys, reps:
                              print(f"Illegal sort type {args.sort_type}"))
         sort_fn(match_keys, reports)
+        #misplaced = check_sorted(match_keys)
+        #print_ln("mis sorted = %s", misplaced)
 
-    #for i in range(numrows):
-    #    print_ln("%s ",reports[i].reveal())
+    for i in range(numrows):
+        print_ln("%s ",reports[i].reveal())
 
     if args.do_attribution:
         breakdown_key_sums = oblivious_attribution(reports,
