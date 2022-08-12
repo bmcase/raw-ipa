@@ -16,6 +16,7 @@ BREAKDOWN_KEY = 3
 
 RADIX_SORT = 0
 TWO_BIT_RADIX_SORT = 4
+THREE_BIT_RADIX_SORT = 5
 BIT_RADIX_SORT = 1
 BATCHER_SORT = 2
 LIBRARY_SORT = 3
@@ -229,7 +230,9 @@ def main():
               RADIX_SORT: lambda mkeys, reps:
               radix_sort(mkeys, reps, n_bits = args.n_bits),
               TWO_BIT_RADIX_SORT: lambda mkeys, reps:
-              radix_sort(mkeys, reps, n_bits = args.n_bits, two_bit = True),
+              radix_sort(mkeys, reps, n_bits = args.n_bits, chunk = 2),
+              THREE_BIT_RADIX_SORT: lambda mkeys, reps:
+              radix_sort(mkeys, reps, n_bits = args.n_bits, chunk = 3),
               BATCHER_SORT: lambda mkeys, reps:
               print("Batcher not implemented")}
 
@@ -240,8 +243,8 @@ def main():
                              print(f"Illegal sort type {args.sort_type}"))
         sort_fn(match_keys, reports)
         match_keys = reports.get_column(MATCH_KEYS)
-        # misplaced = check_sorted(match_keys)
-        # print_ln("mis sorted = %s", misplaced)
+        misplaced = check_sorted(match_keys)
+        print_ln("mis sorted = %s", misplaced)
         # print_ln("len(match_keys) = %s", len(match_keys))
         # if len(reports) < 64:
         #     @for_range(len(reports))
