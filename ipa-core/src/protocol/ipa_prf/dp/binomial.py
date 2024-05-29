@@ -76,11 +76,27 @@ def aggregation_p_one_forth():
     print("smallest_N =", smallest_N)
     print("error =", err)
 
+def aggregation_p_three_forths():
+    p = 3/4
+    desired_epsilon  = 1
+    delta = 10**(-6)
+    d = 1
+    s = 1
+    Delta_1 = 1
+    Delta_2 = 1
+    Delta_infty = 1
+    smallest_N = find_smallest_N(desired_epsilon,p,delta,d,s,Delta_1,Delta_2,Delta_infty)
+    err = error(smallest_N,p,d,s)
+    print("with p = ", p)
+    print("smallest_N =", smallest_N)
+    print("error =", err)
+
 
 
 
 aggregation_p_one_half()
 aggregation_p_one_forth()
+aggregation_p_three_forths()
 
 # Output is
 # with p =  0.5
