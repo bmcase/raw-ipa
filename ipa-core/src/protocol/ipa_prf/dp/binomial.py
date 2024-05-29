@@ -60,6 +60,8 @@ def aggregation_p_one_half():
     print("with p = ", p)
     print("smallest_N =", smallest_N)
     print("error =", err)
+    print()
+
 
 def aggregation_p_one_forth():
     p = 1/4
@@ -75,6 +77,7 @@ def aggregation_p_one_forth():
     print("with p = ", p)
     print("smallest_N =", smallest_N)
     print("error =", err)
+    print()
 
 def aggregation_p_three_forths():
     p = 3/4
@@ -90,6 +93,8 @@ def aggregation_p_three_forths():
     print("with p = ", p)
     print("smallest_N =", smallest_N)
     print("error =", err)
+    print()
+
 
 
 
