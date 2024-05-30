@@ -112,7 +112,12 @@ aggregation_p_three_forths()
 # smallest_N = 1978
 # error = 370.875
 
-# so it seems that there may not be a gain in utlity (decreasing error) by decreasing p (at least in the 1 dimension case)
+# with p =  0.75
+# smallest_N = 1978
+# error = 370.875
+
+
+# so it seems that there may not be a gain in utility (decreasing error) by decreasing p (at least in the 1 dimension case)
 
 
 
