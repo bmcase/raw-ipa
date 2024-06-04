@@ -46,6 +46,21 @@ def find_smallest_N(desired_epsilon,p,delta,d,s,Delta_1,Delta_2,Delta_infty):
     print("smallest N not found")
     return -1
 
+def find_smallest_N_binary_search(desired_epsilon,p,delta,d,s,Delta_1,Delta_2,Delta_infty):
+    lower = 1
+    higher = 10000000
+    index = 0
+
+    while(lower <= higher):
+        mid = math.floor((higher - lower)/2) + lower
+        if(check_max(mid,p,d,s,delta,Delta_infty) and (desired_epsilon >= epsilon(mid,p,delta, s, d, Delta_1, Delta_2, Delta_infty))):
+            index = mid
+            higher = mid - 1
+        else:
+            lower = mid + 1
+    return index
+
+
 def aggregation_p_one_half():
     p = 1/2
     desired_epsilon  = 1
@@ -56,6 +71,10 @@ def aggregation_p_one_half():
     Delta_2 = 1
     Delta_infty = 1
     smallest_N = find_smallest_N(desired_epsilon,p,delta,d,s,Delta_1,Delta_2,Delta_infty)
+    smallest_N_bs = find_smallest_N_binary_search(desired_epsilon,p,delta,d,s,Delta_1,Delta_2,Delta_infty)
+    print("smallest_N =", smallest_N)
+    print("smallest_N_bs =", smallest_N_bs)
+    assert(smallest_N == smallest_N_bs)
     err = error(smallest_N,p,d,s)
     print("with p = ", p)
     print("smallest_N =", smallest_N)
@@ -73,6 +92,8 @@ def aggregation_p_one_forth():
     Delta_2 = 1
     Delta_infty = 1
     smallest_N = find_smallest_N(desired_epsilon,p,delta,d,s,Delta_1,Delta_2,Delta_infty)
+    smallest_N_bs = find_smallest_N_binary_search(desired_epsilon,p,delta,d,s,Delta_1,Delta_2,Delta_infty)
+    assert(smallest_N == smallest_N_bs)
     err = error(smallest_N,p,d,s)
     print("with p = ", p)
     print("smallest_N =", smallest_N)
@@ -89,6 +110,8 @@ def aggregation_p_three_forths():
     Delta_2 = 1
     Delta_infty = 1
     smallest_N = find_smallest_N(desired_epsilon,p,delta,d,s,Delta_1,Delta_2,Delta_infty)
+    smallest_N_bs = find_smallest_N_binary_search(desired_epsilon,p,delta,d,s,Delta_1,Delta_2,Delta_infty)
+    assert(smallest_N == smallest_N_bs)
     err = error(smallest_N,p,d,s)
     print("with p = ", p)
     print("smallest_N =", smallest_N)
