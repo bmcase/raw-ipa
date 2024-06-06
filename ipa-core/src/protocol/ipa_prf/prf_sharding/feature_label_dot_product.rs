@@ -30,6 +30,7 @@ use crate::{
     seq_join::{seq_join, SeqJoin},
     sharding::NotSharded,
 };
+use crate::protocol::dp::dp_for_feature_label_dot_product;
 
 pub struct PrfShardedIpaInputRow<FV: SharedValue, const B: usize> {
     prf_of_match_key: u64,
@@ -269,10 +270,14 @@ where
     let aggregated_result: BitDecomposed<AdditiveShare<Boolean, B>> =
         aggregate_values::<HV, B>(binary_m_ctx, flattened_stream, num_outputs).await?;
 
-    let transposed_aggregated_result: Vec<Replicated<HV>> =
-        Vec::transposed_from(&aggregated_result)?;
+    let noisy_aggregated_result = dp_for_feature_label_dot_product::<B,HV>(
+        sh_ctx,
+        aggregated_result
+    ).await?;
+    // let transposed_aggregated_result: Vec<Replicated<HV>> =
+    //     Vec::transposed_from(&noisy_aggregated_result)?;
 
-    Ok(transposed_aggregated_result.try_into().unwrap())
+    Ok(noisy_aggregated_result.try_into().unwrap())
 }
 
 async fn evaluate_per_user_attribution_circuit<'ctx, FV, const B: usize>(

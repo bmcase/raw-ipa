@@ -30,11 +30,11 @@ pub async fn gen_binomial_noise<'ctx, const B: usize, OV>(
     ctx: UpgradedSemiHonestContext<'ctx, NotSharded, Boolean>,
     num_bernoulli: u32,
 ) -> Result<BitDecomposed<Replicated<Boolean, B>>, Error>
-where
-    Boolean: Vectorizable<B> + FieldSimd<B>,
-    BitDecomposed<Replicated<Boolean, B>>: FromPrss<usize>,
-    OV: BooleanArray + U128Conversions,
-    Replicated<Boolean, B>:
+    where
+        Boolean: Vectorizable<B> + FieldSimd<B>,
+        BitDecomposed<Replicated<Boolean, B>>: FromPrss<usize>,
+        OV: BooleanArray + U128Conversions,
+        Replicated<Boolean, B>:
         BooleanProtocols<UpgradedSemiHonestContext<'ctx, NotSharded, Boolean>, B>,
 {
     // Step 1:  Generate Bernoulli's with PRSS
@@ -73,14 +73,14 @@ pub async fn apply_dp_noise<'ctx, const B: usize, OV>(
     histogram_bin_values: BitDecomposed<Replicated<Boolean, B>>,
     num_bernoulli: u32,
 ) -> Result<Vec<Replicated<OV>>, Error>
-where
-    Boolean: Vectorizable<B> + FieldSimd<B>,
-    BitDecomposed<Replicated<Boolean, B>>: FromPrss<usize>,
-    OV: BooleanArray + U128Conversions,
-    Replicated<Boolean, B>:
+    where
+        Boolean: Vectorizable<B> + FieldSimd<B>,
+        BitDecomposed<Replicated<Boolean, B>>: FromPrss<usize>,
+        OV: BooleanArray + U128Conversions,
+        Replicated<Boolean, B>:
         BooleanProtocols<UpgradedSemiHonestContext<'ctx, NotSharded, Boolean>, B>,
-    Vec<Replicated<OV>>:
-        for<'a> TransposeFrom<&'a BitDecomposed<Replicated<Boolean, B>>, Error = LengthError>,
+        Vec<Replicated<OV>>:
+            for<'a> TransposeFrom<&'a BitDecomposed<Replicated<Boolean, B>>, Error = LengthError>,
 {
     let noise_gen_ctx = ctx.narrow(&DPStep::NoiseGen);
     let noise_vector = gen_binomial_noise::<B, OV>(noise_gen_ctx, num_bernoulli)
@@ -94,11 +94,57 @@ where
         &noise_vector,
         &histogram_bin_values,
     )
-    .await
-    .unwrap();
+        .await
+        .unwrap();
     // Step 5 Transpose output representation
     Ok(Vec::transposed_from(&histogram_noised)?)
 }
+
+// dp_for_aggregation is currently where the DP parameters epsilon, delta
+// are introduced and then from those the parameters of the noise distribution to generate are
+// calculated for use in aggregating histograms.  In the future these DP parameters will be
+// further inputs coming all the way from the client submitting the query.
+pub async fn dp_for_feature_label_dot_product<'ctx, const B: usize, OV>(
+    ctx: UpgradedSemiHonestContext<'ctx, NotSharded, Boolean>,
+    histogram_bin_values: BitDecomposed<Replicated<Boolean, B>>,
+) -> Result<Vec<Replicated<OV>>, Error>
+    where
+        Boolean: Vectorizable<B> + FieldSimd<B>,
+        BitDecomposed<Replicated<Boolean, B>>: FromPrss<usize>,
+        OV: BooleanArray + U128Conversions,
+        Replicated<Boolean, B>:
+        BooleanProtocols<UpgradedSemiHonestContext<'ctx, NotSharded, Boolean>, B>,
+        Vec<Replicated<OV>>:
+            for<'a> TransposeFrom<&'a BitDecomposed<Replicated<Boolean, B>>, Error = LengthError>,
+{
+    let epsilon: f64 = 0.1;
+    let delta = 1e-6;
+    let success_prob = 0.5;
+    let dimensions = B as f64;
+    let quantization_scale = 1.0;
+    let ell_1_sensitivity = 1.0;
+    let ell_2_sensitivity = 1.0;
+    let ell_infty_sensitivity = 1.0;
+    let num_bernoulli = find_smallest_num_bernoulli(
+        epsilon,
+        success_prob,
+        delta,
+        dimensions,
+        quantization_scale,
+        ell_1_sensitivity,
+        ell_2_sensitivity,
+        ell_infty_sensitivity
+    );
+    let noisy_histogram = apply_dp_noise::<B, OV>(
+        ctx,
+        histogram_bin_values,
+        num_bernoulli,
+    )
+        .await
+        .unwrap();
+    Ok(noisy_histogram)
+}
+
 // implement calculations to instantiation Thm 1 of https://arxiv.org/pdf/1805.10559
 // which lets us determine the minimum necessary num_bernoulli for a given epsilon, delta
 // and other parameters
@@ -120,9 +166,9 @@ fn b_p(success_prob: f64) -> f64 {
 fn c_p(success_prob: f64) -> f64 {
     2.0_f64.sqrt()
         * (3.0 * success_prob.powi(3)
-            + 3.0 * (1.0 - success_prob).powi(3)
-            + 2.0 * success_prob.powi(2)
-            + 2.0 * (1.0 - success_prob).powi(2))
+        + 3.0 * (1.0 - success_prob).powi(3)
+        + 2.0 * success_prob.powi(2)
+        + 2.0 * (1.0 - success_prob).powi(2))
 }
 /// equation (16)
 #[allow(dead_code)]
@@ -155,9 +201,9 @@ fn epsilon_constraint(
         * (1.0 - delta / 10.0);
     let third_term_num = (2.0 / 3.0) * ell_infty_sensitivity * (1.25 / delta).ln()
         + ell_infty_sensitivity
-            * d_p(success_prob)
-            * (20.0 * dimensions / delta).ln()
-            * (10.0 / delta).ln();
+        * d_p(success_prob)
+        * (20.0 * dimensions / delta).ln()
+        * (10.0 / delta).ln();
     let third_term_den =
         quantization_scale * num_bernoulli_f64 * success_prob * (1.0 - success_prob);
     first_term_num / first_term_den
@@ -218,15 +264,15 @@ fn find_smallest_num_bernoulli(
             ell_infty_sensitivity,
         ) && desired_epsilon
             >= epsilon_constraint(
-                mid,
-                success_prob,
-                delta,
-                quantization_scale,
-                dimensions,
-                ell_1_sensitivity,
-                ell_2_sensitivity,
-                ell_infty_sensitivity,
-            )
+            mid,
+            success_prob,
+            delta,
+            quantization_scale,
+            dimensions,
+            ell_1_sensitivity,
+            ell_2_sensitivity,
+            ell_infty_sensitivity,
+        )
         {
             index = mid;
             higher = mid - 1;
@@ -355,8 +401,8 @@ mod test {
                     input,
                     num_bernoulli,
                 )
-                .await
-                .unwrap()
+                    .await
+                    .unwrap()
             })
             .await;
         let result_type_confirm: [Vec<Replicated<OutputValue>>; 3] = result;
@@ -402,8 +448,8 @@ mod test {
                         ctx,
                         num_bernoulli,
                     )
-                    .await
-                    .unwrap(),
+                        .await
+                        .unwrap(),
                 )
             })
             .await
@@ -438,8 +484,8 @@ mod test {
                         ctx,
                         num_bernoulli,
                     )
-                    .await
-                    .unwrap(),
+                        .await
+                        .unwrap(),
                 )
             })
             .await
@@ -474,8 +520,8 @@ mod test {
                         ctx,
                         num_bernoulli,
                     )
-                    .await
-                    .unwrap(),
+                        .await
+                        .unwrap(),
                 )
             })
             .await
