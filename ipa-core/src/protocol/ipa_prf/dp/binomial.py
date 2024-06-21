@@ -194,9 +194,40 @@ def walr(j,p):
     print("error =", locale.format_string("%d", err, grouping=True) )
     print()
 
+def binomial_pdf(p,n,k):
+    return math.comb(n, k) * p**k * (1-p)**(n-k)
 
+def binomial_tails(p,n):
+    # probability that a binomial is more than 5 standard_deviations from its mean
+    standard_deviation = math.sqrt(n * p * (1-p))
+    mean = n * p
 
+    lower_bound = mean - 5 * standard_deviation
+    upper_bound = mean + 5 * standard_deviation
 
+    outer_prob = 0
+    for i in range(0,math.ceil(lower_bound)):
+        outer_prob += binomial_pdf(p,n,i)
+
+    return 2 * outer_prob
+
+# Binomial binomial tails
+def binomial_tail_bound():
+    p = 1/2
+    desired_epsilon  = 3.1
+    delta = 10**(-6)
+    d = 1
+    s = 1
+    Delta_1 = 32
+    Delta_2 = 32
+    Delta_infty = 32
+    smallest_N = find_smallest_N_binary_search(desired_epsilon,p,delta,d,s,Delta_1,Delta_2,Delta_infty)
+    print("smallest N",smallest_N)
+    print("binomial tail bound", binomial_tails(p,smallest_N))
+
+def 
+
+binomial_tail_bound()
 
 # aggregation_p_one_half()
 # aggregation_s_10th()
@@ -207,10 +238,10 @@ def walr(j,p):
 
 
 #walr
-walr(1,0.5)
-walr(10,0.5)
-walr(100,0.5)
-walr(.1,0.5)
+# walr(1,0.5)
+# walr(10,0.5)
+# walr(100,0.5)
+# walr(.1,0.5)
 
 
 
