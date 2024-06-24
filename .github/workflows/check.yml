@@ -106,7 +106,7 @@ jobs:
         run: cargo build --release --features "shuttle multi-threading"
 
       - name: Run concurrency tests
-        run: cargo test --release --features "shuttle multi-threading"
+        run: cargo test --release --features "shuttle multi-threading" -- --nocapture
 
 #  extra:
 #    name: Additional Builds and Concurrency Tests
