@@ -442,68 +442,68 @@ pub mod tests {
     #[test]
     fn semi_honest_with_dp() {
         println!("Running semi_honest_with_dp");
-        // run(|| async {
-        //     const SS_BITS: usize = 5;
-        //     let world = TestWorld::default();
-        //     let expected: Vec<u32> = vec![0, 2, 5, 0, 0, 0, 0, 0];
-        //     let epsilon = 3.1;
-        //     let dp_params = DpParams::WithDp { epsilon };
-        //     let per_user_credit_cap = 2_f64.powi(i32::try_from(SS_BITS).unwrap());
-        //
-        //     let records: Vec<TestRawDataRecord> = vec![
-        //         test_input(0, 12345, false, 1, 0),
-        //         test_input(5, 12345, false, 2, 0),
-        //         test_input(10, 12345, true, 0, 5),
-        //         test_input(0, 68362, false, 1, 0),
-        //         test_input(20, 68362, true, 0, 2),
-        //     ];
-        //
-        //     let mut result: Vec<_> = world
-        //         .semi_honest(records.into_iter(), |ctx, input_rows| async move {
-        //             oprf_ipa::<BA5, BA3, BA16, BA20, SS_BITS, 32>(ctx, input_rows, None, dp_params)
-        //                 .await
-        //                 .unwrap()
-        //         })
-        //         .await
-        //         .reconstruct();
-        //     result.truncate(expected.len());
-        //     let num_bernoulli = crate::protocol::dp::find_smallest_num_bernoulli(
-        //         epsilon,
-        //         0.5,
-        //         1e-6,
-        //         1.0,
-        //         1.0,
-        //         per_user_credit_cap,
-        //         per_user_credit_cap,
-        //         per_user_credit_cap,
-        //     );
-        //     let mean: f64 = f64::from(num_bernoulli) * 0.5; // n * p
-        //     let standard_deviation: f64 = (f64::from(num_bernoulli) * 0.5 * 0.5).sqrt(); //  sqrt(n * (p) * (1-p))
-        //     println!(
-        //         "In semi_honest_with_dp:  mean = {mean}, standard_deviation = {standard_deviation}"
-        //     );
-        //     let result_u32: Vec<u32> = result
-        //         .iter()
-        //         .map(|&v| u32::try_from(v.as_u128()).unwrap())
-        //         .collect::<Vec<_>>();
-        //
-        //     println!(
-        //         "in test: semi_honest_with_dp. len result = {} and expected len =  {}",
-        //         result_u32.len(),
-        //         expected.len()
-        //     );
-        //     assert!(result_u32.len() == expected.len());
-        //     for (index, actual_u128) in result_u32.iter().enumerate() {
-        //         println!("actual = {actual_u128}, expected = {}", expected[index]);
-        //         assert!(
-        //             f64::from(*actual_u128) - mean
-        //                 > f64::from(expected[index]) - 5.0 * standard_deviation
-        //                 && f64::from(*actual_u128) - mean
-        //                     < f64::from(expected[index]) + 5.0 * standard_deviation
-        //         , "DP result was more than 5 standard deviations of the noise from the expected result"
-        //         );
-        //     }
-        // });
+        run(|| async {
+            const SS_BITS: usize = 5;
+            let world = TestWorld::default();
+            let expected: Vec<u32> = vec![0, 2, 5, 0, 0, 0, 0, 0];
+            let epsilon = 3.1;
+            let dp_params = DpParams::WithDp { epsilon };
+            let per_user_credit_cap = 2_f64.powi(i32::try_from(SS_BITS).unwrap());
+
+            let records: Vec<TestRawDataRecord> = vec![
+                test_input(0, 12345, false, 1, 0),
+                test_input(5, 12345, false, 2, 0),
+                test_input(10, 12345, true, 0, 5),
+                test_input(0, 68362, false, 1, 0),
+                test_input(20, 68362, true, 0, 2),
+            ];
+
+            let mut result: Vec<_> = world
+                .semi_honest(records.into_iter(), |ctx, input_rows| async move {
+                    oprf_ipa::<BA5, BA3, BA16, BA20, SS_BITS, 32>(ctx, input_rows, None, dp_params)
+                        .await
+                        .unwrap()
+                })
+                .await
+                .reconstruct();
+            result.truncate(expected.len());
+            let num_bernoulli = crate::protocol::dp::find_smallest_num_bernoulli(
+                epsilon,
+                0.5,
+                1e-6,
+                1.0,
+                1.0,
+                per_user_credit_cap,
+                per_user_credit_cap,
+                per_user_credit_cap,
+            );
+            let mean: f64 = f64::from(num_bernoulli) * 0.5; // n * p
+            let standard_deviation: f64 = (f64::from(num_bernoulli) * 0.5 * 0.5).sqrt(); //  sqrt(n * (p) * (1-p))
+            println!(
+                "In semi_honest_with_dp:  mean = {mean}, standard_deviation = {standard_deviation}"
+            );
+            let result_u32: Vec<u32> = result
+                .iter()
+                .map(|&v| u32::try_from(v.as_u128()).unwrap())
+                .collect::<Vec<_>>();
+
+            println!(
+                "in test: semi_honest_with_dp. len result = {} and expected len =  {}",
+                result_u32.len(),
+                expected.len()
+            );
+            assert!(result_u32.len() == expected.len());
+            for (index, actual_u128) in result_u32.iter().enumerate() {
+                println!("actual = {actual_u128}, expected = {}", expected[index]);
+                assert!(
+                    f64::from(*actual_u128) - mean
+                        > f64::from(expected[index]) - 5.0 * standard_deviation
+                        && f64::from(*actual_u128) - mean
+                            < f64::from(expected[index]) + 5.0 * standard_deviation
+                , "DP result was more than 5 standard deviations of the noise from the expected result"
+                );
+            }
+        });
     }
 
     #[test]
