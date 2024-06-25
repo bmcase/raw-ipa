@@ -127,9 +127,14 @@ where
     Vec<Replicated<OV>>:
         for<'a> TransposeFrom<&'a BitDecomposed<Replicated<Boolean, B>>, Error = LengthError>,
 {
+    println!("In dp_for_histograms");
     match dp_params {
-        DpParams::NoDp => Ok(Vec::transposed_from(&histogram_bin_values)?),
+        DpParams::NoDp => {
+            println!("dp_for_histograms, NoDp");
+            Ok(Vec::transposed_from(&histogram_bin_values)?)
+        },
         DpParams::WithDp { epsilon } => {
+            println!("dp_for_histograms, WithDp");
             assert!(epsilon > 0.0 && epsilon <= 10.0);
             let delta = 1e-6;
             let success_prob = 0.5;
