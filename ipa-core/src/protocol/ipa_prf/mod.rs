@@ -280,12 +280,12 @@ where
     )
     .await?;
     println!("********************** next step is adding noise");
-    let dp_validator = ctx.narrow(&Step::DP).validator::<Boolean>();
-    let dp_ctx: UpgradedSemiHonestContext<_, _> = dp_validator.context();
+    // let dp_validator = ctx.narrow(&Step::DP).validator::<Boolean>();
+    // let dp_ctx: UpgradedSemiHonestContext<_, _> = dp_validator.context();
 
-    let noisy_histogram =
-        dp_for_histogram::<_, B, HV, SS_BITS>(dp_ctx, histogram, dp_params).await?;
-    Ok(noisy_histogram)
+    // let noisy_histogram =
+    //     dp_for_histogram::<_, B, HV, SS_BITS>(dp_ctx, histogram, dp_params).await?;
+    Ok(histogram)
 }
 
 #[tracing::instrument(name = "compute_prf_for_inputs", skip_all)]
