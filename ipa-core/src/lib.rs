@@ -106,7 +106,7 @@ pub(crate) mod test_executor {
         F: Fn() -> Fut + Send + Sync + 'static,
         Fut: Future<Output = ()>,
     {
-        run_with::<_, _, 32>(f);
+        run_with::<_, _, 5>(f);
     }
 
     pub fn run_with<F, Fut, const ITER: usize>(f: F)

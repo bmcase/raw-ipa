@@ -30,6 +30,8 @@ use crate::{
 pub async fn gen_binomial_noise<C, const B: usize, OV>(
     ctx: C,
     num_bernoulli: u32,
+    // histogram_bin_values: BitDecomposed<Replicated<Boolean, B>>,
+
 ) -> Result<BitDecomposed<Replicated<Boolean, B>>, Error>
 where
     C: Context,
@@ -64,6 +66,7 @@ where
         aggregate_values::<_, OV, B>(ctx, aggregation_input, num_bernoulli as usize).await;
     println!("finished gen_binomial_noise");
     noise_vector
+    // Ok(histogram_bin_values)
 }
 /// `apply_dp_noise` takes the noise distribution parameters (`num_bernoulli` and in the future `quantization_scale`)
 /// and the vector of values to have noise added to.
@@ -168,6 +171,7 @@ where
                     .unwrap();
 
             Ok(noisy_histogram)
+            // Ok(Vec::transposed_from(&histogram_bin_values)?)
         }
     }
 }
