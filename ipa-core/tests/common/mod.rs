@@ -286,14 +286,22 @@ pub fn test_ipa_with_config(mode: IpaSecurityModel, https: bool, config: IpaQuer
         // currently it is.
         command.arg("--plaintext-match-keys");
     }
+    println!("Getting ready to spawn binaries");
 
     let test_mpc = command.spawn().unwrap().terminate_on_drop();
+    println!("spawned binaries");
+
+
     test_mpc.wait().unwrap_status();
+    println!("11111");
+
     // basic output checks - output should have the exact size as number of breakdowns
     let output = serde_json::from_str::<IpaQueryResult>(
         &std::fs::read_to_string(&output_file).expect("IPA results file exists"),
     )
     .expect("IPA results file is valid JSON");
+    println!("22222");
+
 
     assert_eq!(
         usize::try_from(config.max_breakdown_key).unwrap(),
