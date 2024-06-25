@@ -78,7 +78,7 @@ jobs:
 
       - name: Run Web Tests
 #        run: cargo test -p ipa-core --no-default-features --features "cli web-app real-world-infra test-fixture compact-gate"
-        run: Run cargo test -p ipa-core --no-default-features --features "cli web-app real-world-infra test-fixture compact-gate" -- --no-capture
+        run: Run cargo test -p ipa-core --no-default-features --features "cli web-app real-world-infra test-fixture compact-gate" -- --nocapture
 #
 #  release:
 #    name: Release builds and tests
