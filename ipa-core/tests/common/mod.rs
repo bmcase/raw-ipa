@@ -12,7 +12,9 @@ use std::{
 
 use command_fds::CommandFdExt;
 use ipa_core::{
-    cli::IpaQueryResult, helpers::query::IpaQueryConfig, test_fixture::ipa::IpaSecurityModel,
+    cli::IpaQueryResult,
+    helpers::query::{DpParams, IpaQueryConfig},
+    test_fixture::ipa::IpaSecurityModel,
 };
 use rand::thread_rng;
 use rand_core::RngCore;
@@ -255,8 +257,20 @@ pub fn test_ipa_with_config(mode: IpaSecurityModel, https: bool, config: IpaQuer
             "--per-user-credit-cap",
             &config.per_user_credit_cap.to_string(),
         ])
-        .args(["--dp-params", &config.dp_params.to_string()])
+        // .args(["--dp-params", &config.dp_params.to_string()])
         .stdin(Stdio::piped());
+
+    match config.dp_params {
+        DpParams::NoDp => {
+            command.args(["--with-dp", &0_u32.to_string()]);
+        }
+        DpParams::WithDp { epsilon } => {
+            command
+                .args(["--with-dp", &1_u32.to_string()])
+                .args(["--epsilon", &epsilon.to_string()]);
+        }
+    }
+
     if config.attribution_window_seconds.is_some() {
         command.args([
             "--attribution-window-seconds",
