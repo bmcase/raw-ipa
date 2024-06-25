@@ -38,6 +38,7 @@ where
     OV: BooleanArray + U128Conversions,
     Replicated<Boolean, B>: BooleanProtocols<C, B>,
 {
+    println!("In gen_binomial_noise");
     // Step 1:  Generate Bernoulli's with PRSS
     // sample a stream of `total_bits = num_bernoulli * B` bit from PRSS where B is number of histogram bins
     // and num_bernoulli is the number of Bernoulli samples to sum to get a sample from a Binomial
@@ -55,6 +56,7 @@ where
             ctx.prss().generate_with(RecordId::from(i), bits);
         vector_input_to_agg.push(element);
     }
+    println!("finished PRSS generation");
     // Step 2: Convert to input from needed for aggregate_values
     let aggregation_input = Box::pin(stream::iter(vector_input_to_agg.into_iter()).map(Ok));
     // Step 3: Call `aggregate_values` to sum up Bernoulli noise.

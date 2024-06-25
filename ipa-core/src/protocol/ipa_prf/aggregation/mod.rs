@@ -240,6 +240,7 @@ where
     Boolean: FieldSimd<B>,
     Replicated<Boolean, B>: BooleanProtocols<C, B>,
 {
+    println!("In aggregate_values");
     let mut depth = 0;
     while num_rows > 1 {
         // We reduce pairwise, passing through the odd record at the end if there is one, so the
