@@ -83,10 +83,13 @@ where
     Vec<Replicated<OV>>:
         for<'a> TransposeFrom<&'a BitDecomposed<Replicated<Boolean, B>>, Error = LengthError>,
 {
+    println!("In apply_dp_noise");
     let noise_gen_ctx = ctx.narrow(&DPStep::NoiseGen);
     let noise_vector = gen_binomial_noise::<C, B, OV>(noise_gen_ctx, num_bernoulli)
         .await
         .unwrap();
+    println!("Finished generating the noise");
+
     // Step 4:  Add DP noise to output values
     let apply_noise_ctx = ctx
         .narrow(&DPStep::ApplyNoise)
@@ -154,6 +157,7 @@ where
                 ell_2_sensitivity,
                 ell_infty_sensitivity,
             );
+            println!("found smallest num_bernoulli = {num_bernoulli}");
             let noisy_histogram =
                 apply_dp_noise::<C, B, OV>(ctx, histogram_bin_values, num_bernoulli)
                     .await

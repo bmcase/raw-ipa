@@ -248,6 +248,8 @@ where
     Vec<Replicated<HV>>:
         for<'a> TransposeFrom<&'a BitDecomposed<Replicated<Boolean, B>>, Error = LengthError>,
 {
+    println!("***************************In oprf_ipa");
+
     if input_rows.is_empty() {
         return Ok(vec![Replicated::ZERO; B]);
     }
@@ -277,7 +279,7 @@ where
         &histogram,
     )
     .await?;
-
+    println!("********************** next step is adding noise");
     let dp_validator = ctx.narrow(&Step::DP).validator::<Boolean>();
     let dp_ctx: UpgradedSemiHonestContext<_, _> = dp_validator.context();
 
