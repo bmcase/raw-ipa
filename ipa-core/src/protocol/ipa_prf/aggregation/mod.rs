@@ -320,6 +320,8 @@ where
         .try_next()
         .await?
         .unwrap_or_else(|| BitDecomposed::new(iter::empty()));
+    println!("before the assert");
+
     assert!(
         aggregated_stream.next().await.is_none(),
         "aggregation should not produce multiple outputs"
