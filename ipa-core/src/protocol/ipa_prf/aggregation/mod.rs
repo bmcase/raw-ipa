@@ -314,6 +314,7 @@ where
         num_rows = next_num_rows;
         depth += 1;
     }
+    println!("finished loop in aggregation");
 
     let mut result = aggregated_stream
         .try_next()
@@ -323,6 +324,7 @@ where
         aggregated_stream.next().await.is_none(),
         "aggregation should not produce multiple outputs"
     );
+    println!("made it to here");
     // If there were less than 2^(|ov| - |tv|) inputs, then we didn't add enough carries to produce
     // a full-length output, so pad the output now.
     result.resize(
