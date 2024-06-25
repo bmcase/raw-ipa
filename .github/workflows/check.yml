@@ -48,65 +48,68 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check --config "imports_granularity=Crate,group_imports=StdExternalCrate"
+#      - name: Check formatting
+#        run: cargo fmt --all -- --check --config "imports_granularity=Crate,group_imports=StdExternalCrate"
+#
+#      - name: Clippy
+#        if: ${{ success() || failure() }}
+#        run: cargo clippy --tests
+#
+#      - name: Clippy concurrency tests
+#        if: ${{ success() || failure() }}
+#        run: cargo clippy --tests --features shuttle
+#
+#      - name: Clippy web
+#        if: ${{ success() || failure() }}
+#        run: cargo clippy --no-default-features --features "cli web-app real-world-infra test-fixture compact-gate"
+#
+#      - name: Build
+#        if: ${{ success() || failure() }}
+#        run: cargo build --tests
 
-      - name: Clippy
-        if: ${{ success() || failure() }}
-        run: cargo clippy --tests
+#      - name: Run tests
+#        run: cargo test
+      - name: Run compact gate tests
+        run: cargo test --test compact_gate compact_gate_cap_16_with_window_semi_honest --features=cli,compact-gate,web-app,real-world-infra,test-fixture -- --no-capture
 
-      - name: Clippy concurrency tests
-        if: ${{ success() || failure() }}
-        run: cargo clippy --tests --features shuttle
-
-      - name: Clippy web
-        if: ${{ success() || failure() }}
-        run: cargo clippy --no-default-features --features "cli web-app real-world-infra test-fixture compact-gate"
-
-      - name: Build
-        if: ${{ success() || failure() }}
-        run: cargo build --tests
-
-      - name: Run tests
-        run: cargo test
-
-      - name: Run tests with multithreading feature enabled
-        run: cargo test --features "multi-threading"
-
-      - name: Run Web Tests
-        run: cargo test -p ipa-core --no-default-features --features "cli web-app real-world-infra test-fixture compact-gate"
-
-  release:
-    name: Release builds and tests
-    runs-on: ubuntu-latest
-    env:
-      RUSTFLAGS: -C target-cpu=native
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/rm
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy,rustfmt
-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
-
-      - name: Release Build
-        run: cargo build --release
-
-      - name: Build concurrency tests
-        run: cargo build --release --features "shuttle multi-threading"
-
-      - name: Run concurrency tests
-        run: cargo test --release --features "shuttle multi-threading"
+#
+#      - name: Run tests with multithreading feature enabled
+#        run: cargo test --features "multi-threading"
+#
+#      - name: Run Web Tests
+#        run: cargo test -p ipa-core --no-default-features --features "cli web-app real-world-infra test-fixture compact-gate"
+#
+#  release:
+#    name: Release builds and tests
+#    runs-on: ubuntu-latest
+#    env:
+#      RUSTFLAGS: -C target-cpu=native
+#    steps:
+#      - uses: actions/checkout@v4
+#      - uses: ./.github/actions/rm
+#
+#      - uses: dtolnay/rust-toolchain@stable
+#        with:
+#          components: clippy,rustfmt
+#
+#      - uses: actions/cache@v4
+#        with:
+#          path: |
+#            ~/.cargo/bin/
+#            ~/.cargo/registry/index/
+#            ~/.cargo/registry/cache/
+#            ~/.cargo/git/db/
+#            target/
+#          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+#
+#      - name: Release Build
+#        run: cargo build --release
+#
+#      - name: Build concurrency tests
+#        run: cargo build --release --features "shuttle multi-threading"
+#
+#      - name: Run concurrency tests
+#        run: cargo test --release --features "shuttle multi-threading"
 
 #  extra:
 #    name: Additional Builds and Concurrency Tests

@@ -262,9 +262,12 @@ pub fn test_ipa_with_config(mode: IpaSecurityModel, https: bool, config: IpaQuer
 
     match config.dp_params {
         DpParams::NoDp => {
+            println!("***********command.args, NoDp");
             command.args(["--with-dp", &0_u32.to_string()]);
         }
         DpParams::WithDp { epsilon } => {
+            println!("***********command.args, WithDp");
+
             command
                 .args(["--with-dp", &1_u32.to_string()])
                 .args(["--epsilon", &epsilon.to_string()]);
