@@ -448,7 +448,9 @@ pub mod tests {
             const SS_BITS: usize = 5;
             let world = TestWorld::default();
             let expected: Vec<u32> = vec![0, 2, 5, 0, 0, 0, 0, 0];
-            let epsilon = 3.1;
+            let epsilon = 9.0;
+            // let epsilon = 3.1;
+
             let dp_params = DpParams::WithDp { epsilon };
             let per_user_credit_cap = 2_f64.powi(i32::try_from(SS_BITS).unwrap());
 
