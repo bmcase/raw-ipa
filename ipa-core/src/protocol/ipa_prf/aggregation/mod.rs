@@ -243,6 +243,7 @@ where
     println!("In aggregate_values");
     let mut depth = 0;
     while num_rows > 1 {
+        println!("num_rows = {num_rows}");
         // We reduce pairwise, passing through the odd record at the end if there is one, so the
         // number of outputs (`next_num_rows`) gets rounded up. If calculating an explicit total
         // records, that would get rounded down.
