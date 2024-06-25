@@ -329,6 +329,7 @@ where
         Replicated::<Boolean, B>::ZERO,
     );
     // Aggregation output to remain vectorized
+    println!("At the end of aggregate_values");
     Ok(result)
 }
 

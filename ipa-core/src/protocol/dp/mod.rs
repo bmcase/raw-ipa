@@ -62,6 +62,7 @@ where
     // Step 3: Call `aggregate_values` to sum up Bernoulli noise.
     let noise_vector: Result<BitDecomposed<AdditiveShare<Boolean, { B }>>, Error> =
         aggregate_values::<_, OV, B>(ctx, aggregation_input, num_bernoulli as usize).await;
+    println!("finished gen_binomial_noise");
     noise_vector
 }
 /// `apply_dp_noise` takes the noise distribution parameters (`num_bernoulli` and in the future `quantization_scale`)
@@ -104,6 +105,7 @@ where
     )
     .await
     .unwrap();
+    println!("Finished apply_dp_noise");
 
     // Step 5 Transpose output representation
     Ok(Vec::transposed_from(&histogram_noised)?)
