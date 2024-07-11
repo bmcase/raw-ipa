@@ -238,6 +238,13 @@ where
     if input_rows.is_empty() {
         return Ok(vec![Replicated::ZERO; B]);
     }
+
+    // Apply DP padding
+    // let input_rows_padded = apply_dp_padding(ctx.narrow(&Step::DpPadding), input_rows).await?;
+
+    // then use input_rows_added instead of input_rows below
+    // TODO
+
     let shuffled = shuffle_inputs(ctx.narrow(&Step::Shuffle), input_rows).await?;
     let mut prfd_inputs = compute_prf_for_inputs(ctx.clone(), &shuffled).await?;
 
