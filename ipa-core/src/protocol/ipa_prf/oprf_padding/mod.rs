@@ -80,28 +80,83 @@ where
         let mut bk_counter = BreakdownCounter{
             bk:  0,
             bkcount: 0,
+            breakdown_cardinalities: breakdown_cardinalities,
+            num_breakdowns: num_breakdowns,
         };
         let mut mk_counter = MatchkeyCounter{
             mkcard: 0,
             mkcount: 0,
+            matchkey_cardinalities: matchkey_cardinalities,
+            matchkey_cardinality_cap: matchkey_cardinality_cap,
         };
-        while bk_counter.bk < num_breakdowns && bk_counter.bkcount < breakdown_cardinalities[num_breakdowns-1] &&
-            mk_counter.mkcard < matchkey_cardinality_cap && mk_counter.mkcount < matchkey_cardinalities[matchkey_cardinality_cap-1]{
+        while bk_counter.remaining() && mk_counter.remaining() {
+            // maybe shouldn't add breakdowns when mkcard = 0, or these may never
+            // make it to be revealed for aggregation
 
+            dummy_mks.push(mk_counter.current_mk());
+            dummy_breakdowns.push(bk_counter.current_bk());
 
-
+            mk_counter.next();
+            bk_counter.next();
         }
 
 
     }
-    struct BreakdownCounter{
-        bk: u32,
-        bkcount: u32,
-
+    pub struct BreakdownCounter{
+        pub bk: u32,
+        pub bkcount: u32,
+        pub breakdown_cardinalities: Vec<u32>,
+        pub num_breakdowns: u32,
     }
-    struct MatchkeyCounter{
-        mkcard: u32,
-        mkcount: u32,
+    impl BreakdownCounter {
+        fn remaining(&self) -> bool {
+            self.bk < self.num_breakdowns  && self.bkcount < self.breakdown_cardinalities[self.num_breakdowns-1]
+        }
+        fn next(&mut self) {
+            if self.remaining() {
+                if self.bkcount < self.breakdown_cardinalities[self.bk -1] {
+                    self.bkcount += 1;
+                } else {
+                    self.bk += 1;
+                    self.bkcount = 0;
+                }
+            }
+        }
+        fn current_bk(&self) -> u32{
+            if self.remaining() {
+                self.bk
+            } else {
+                0_u32
+            }
+        }
+        }
+    }
+
+
+
+    pub struct MatchkeyCounter{
+        pub mkcard: u32,
+        pub mkcount: u32,
+        pub matchkey_cardinalities: Vec<u32>,
+        pub matchkey_cardinality_cap: u32,
+        pub current_mk: u64,
+    }
+    impl MatchkeyCounter {
+        fn remaining(&self) -> bool {
+            self.mkcard < self.matchkey_cardinality_cap && self.mkcount < self.matchkey_cardinalities[self.matchkey_cardinality_cap - 1]
+        }
+        fn next(&mut self) {
+            if self.remaining() {
+                if self.mkcount < self.matchkey_cardinalities[self.mkcard - 1] {
+                    self.mkcount += 1;
+                } else {
+                    self.mkcard += 1;
+                    self.mkcount = 0;
+                    self.current_mk = rand; // todo
+                }
+            }
+        }
+        fn current_mk()
     }
 
     // H1 and H2 will generate the dummies
