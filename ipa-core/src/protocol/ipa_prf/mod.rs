@@ -88,6 +88,7 @@ pub const AGG_CHUNK: usize = 256;
 pub const SORT_CHUNK: usize = 256;
 
 use step::IpaPrfStep as Step;
+use crate::protocol::ipa_prf::oprf_padding::apply_dp_padding;
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
@@ -240,7 +241,7 @@ where
     }
 
     // Apply DP padding
-    // let input_rows_padded = apply_dp_padding(ctx.narrow(&Step::DpPadding), input_rows).await?;
+    let input_rows_padded = apply_dp_padding(ctx.narrow(&Step::DpPadding), input_rows).await?;
 
     // then use input_rows_added instead of input_rows below
     // TODO
