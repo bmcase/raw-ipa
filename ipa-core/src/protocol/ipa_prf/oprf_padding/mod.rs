@@ -3,6 +3,7 @@ mod insecure;
 
 use std::cmp::max;
 use rand::Rng;
+use rand::rngs::ThreadRng;
 #[cfg(any(test, feature = "test-fixture", feature = "cli"))]
 pub use insecure::DiscreteDp as InsecureDiscreteDp;
 use crate::ff::ArrayAccess;
@@ -19,6 +20,7 @@ use crate::protocol::RecordId;
 use crate::secret_sharing::replicated::ReplicatedSecretSharing;
 use crate::secret_sharing::replicated::semi_honest::AdditiveShare;
 use crate::secret_sharing::SharedValue;
+use crate::error::Error;
 
 
 pub async fn apply_dp_padding<C, BK, TV, TS>(
@@ -69,6 +71,8 @@ where
         breakdown_cardinalities: breakdown_cardinalities,
         num_breakdowns: num_breakdowns,
     };
+    let mut rng = rand::thread_rng();
+
     let mut mk_counter = MatchkeyCounter::new(
         matchkey_cardinalities,
         matchkey_cardinality_cap);
@@ -125,7 +129,7 @@ where
             Role::H3 => y.reshare(&ctx, RecordId::from(0),Role::H1),
         }
         // then use shuffled_to_oprfreport to convert to an OPRFIPAInputRow
-        let oprf_input_row = shuffled_to_oprfreport<BA112, BK, TV, TS>(y);
+        let oprf_input_row: OPRFIPAInputRow<BK, TV, TS> = shuffled_to_oprfreport::<BA112, BK, TV, TS>(y);
         padding_input_rows.push(oprf_input_row);
 
     }
@@ -190,20 +194,23 @@ where
         pub current_mk: u64,
         pub oprf_padding_finished: bool,
         pub counter_for_bk_only: u32,
+        pub rng: ThreadRng,
     }
     impl MatchkeyCounter {
         pub fn new(
             matchkey_cardinalities: Vec<u32>,
             matchkey_cardinality_cap: u32,
+            mut rng: ThreadRng,
         ) -> Self {
             Self {
                 mkcard: 1,
                 mkcount: 0,
                 matchkey_cardinalities,
                 matchkey_cardinality_cap,
-                current_mk: rand,
+                current_mk: rng.gen(),
                 oprf_padding_finished: false,
                 counter_for_bk_only: 0,
+                rng,
             }
         }
         fn remaining(&self) -> bool {
@@ -216,7 +223,7 @@ where
                 } else {
                     self.mkcard += 1;
                     self.mkcount = 0;
-                    self.current_mk = rand; // todo
+                    self.current_mk = self.rng.gen();
                 }
             }
         }
@@ -226,7 +233,7 @@ where
             } else {
                 if self.counter_for_bk_only == 1 {
                     // generate fresh matchkey
-                    self.current_mk = rand;
+                    self.current_mk = self.rng.gen();
                     self.counter_for_bk_only = 1;
                     return self.current_mk;
                 } else {
@@ -235,11 +242,3 @@ where
             }
         }
     }
-
-
-
-
-
-
-
-}
