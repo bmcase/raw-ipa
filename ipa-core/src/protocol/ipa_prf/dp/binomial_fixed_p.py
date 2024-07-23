@@ -82,7 +82,7 @@ def study_quantization_scale():
         err = error(smallest_N,p,d,s)
         print(f"s = {s}, smallest_N = {smallest_N:,}, error = {err}")
 
-study_quantization_scale()
+# study_quantization_scale()
 
 
 # for fixed p (and other params), compare which contraint (epsilon or delta) is active for a particular N
@@ -216,6 +216,44 @@ def walr(j,p):
     print("error =", locale.format_string("%d", err, grouping=True) )
     print()
 
+def parameter_table():
+    print("printing parameter_table")
+    epsilon_values = [0.01,0.1,1,5,10]
+    delta_values = [10**(-9),10**(-8),10**(-7),10**(-6)]
+
+    dimension_values = [1, 10, 100]
+    per_user_credit_cap_values = [1,16,32,64]
+    quantization_scale_values = [1, 0.1, 0.01]
+
+    p = 0.5
+    # Create a string with placeholders for the values
+    table_format_string = "{epsilon}, {delta}, {dimension}, {ell_1_sensitivity}, {ell_2_sensitivity}, {ell_infity_sensitivity}, {quantization_scale}, {num_bernoulli}, {err}"
+    for epsilon in epsilon_values:
+        for delta in delta_values:
+            for dimension in dimension_values:
+                for per_user_credit_cap in per_user_credit_cap_values:
+                    ell_1_sensitivity = per_user_credit_cap
+                    ell_2_sensitivity = per_user_credit_cap
+                    ell_infity_sensitivity = per_user_credit_cap
+                    for quantization_scale in quantization_scale_values:
+                        num_bernoulli = find_smallest_N_binary_search(epsilon,p,delta,dimension,quantization_scale,ell_1_sensitivity,ell_2_sensitivity,ell_infity_sensitivity)
+                        err = error(num_bernoulli,p,dimension,quantization_scale)
+                        # Replace the placeholders with the actual values
+                        table_row = table_format_string.format(
+                            epsilon=epsilon,
+                            delta=delta,
+                            dimension=dimension,
+                            ell_1_sensitivity=ell_1_sensitivity,
+                            ell_2_sensitivity=ell_2_sensitivity,
+                            ell_infity_sensitivity=ell_infity_sensitivity,
+                            quantization_scale=quantization_scale,
+                            num_bernoulli=num_bernoulli,
+                            err=err
+                        )
+                        # Print the table row
+                        print(table_row)
+
+parameter_table()
 
 
 
