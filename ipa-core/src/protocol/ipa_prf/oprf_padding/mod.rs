@@ -33,6 +33,12 @@ where
     TV: BooleanArray,
     TS: BooleanArray,
 {
+    // H1 and H2 will need to use PRSS to establish a common shared secret
+    // then they will use this to see the rng which needs to be passed in to the
+    // OPRF padding struct.  They will then both generate the same random noise for padding.
+    // For the values they will follow a convension to get the values into secret shares (maybe
+    // also using PRSS values). H3 will set to zero. 
+
     // H_i samples how many dummies to create
     // padding for aggregation
     let aggregation_padding_sensitivity = 10; // document how set
