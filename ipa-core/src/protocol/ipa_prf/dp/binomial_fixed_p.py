@@ -50,7 +50,7 @@ def find_smallest_N(desired_epsilon,p,delta,d,s,Delta_1,Delta_2,Delta_infty):
 
 def find_smallest_N_binary_search(desired_epsilon,p,delta,d,s,Delta_1,Delta_2,Delta_infty):
     lower = 1
-    higher = 10**15
+    higher = 10**22
     index = 0
 
     while(lower <= higher):
@@ -60,7 +60,9 @@ def find_smallest_N_binary_search(desired_epsilon,p,delta,d,s,Delta_1,Delta_2,De
             higher = mid - 1
         else:
             lower = mid + 1
-    assert(index > 0)
+    if index == 0:
+        print("smallest_N not found less than `higher`")
+        assert(index > 0)
     return index
 
 def study_quantization_scale():
@@ -218,40 +220,45 @@ def walr(j,p):
 
 def parameter_table():
     print("printing parameter_table")
-#     epsilon_values = [0.01,0.1,1,5,10]
-    epsilon_values = [5]
-    delta_values = [10**(-9),10**(-8),10**(-7),10**(-6)]
-    dimension_values = [1, 10, 100]
+    epsilon_delta_values = [(0.01, 10**(-9)), (0.1, 10**(-7)), (1, 10**(-7)), (5, 10**(-7))]
+    #     epsilon_values = [0.01,0.1,1,5,10]
+#     epsilon_values = [5]
+#     delta_values = [10**(-9),10**(-8),10**(-7),10**(-6)]
+    dimension_values = [32]
     per_user_credit_cap_values = [1,16,32,64]
-    quantization_scale_values = [1, 0.5, 0.1, 0.05, 0.01, 0.005, 0.001]
+    quantization_scale_values = [1, 0.5, 0.2, 0.15, 0.1, 0.05, 0.01, 0.008, 0.005, 0.001]
+    quantization_scale_values = sorted(quantization_scale_values, reverse=True)
+
 
     p = 0.5
     # Create a string with placeholders for the values
     table_format_string = "{epsilon}, {delta}, {dimension}, {ell_1_sensitivity}, {ell_2_sensitivity}, {ell_infity_sensitivity}, {quantization_scale}, {num_bernoulli}, {err}"
-    for epsilon in epsilon_values:
-        for delta in delta_values:
-            for dimension in dimension_values:
-                for per_user_credit_cap in per_user_credit_cap_values:
-                    ell_1_sensitivity = per_user_credit_cap
-                    ell_2_sensitivity = per_user_credit_cap
-                    ell_infity_sensitivity = per_user_credit_cap
-                    for quantization_scale in quantization_scale_values:
-                        num_bernoulli = find_smallest_N_binary_search(epsilon,p,delta,dimension,quantization_scale,ell_1_sensitivity,ell_2_sensitivity,ell_infity_sensitivity)
-                        err = error(num_bernoulli,p,dimension,quantization_scale)
-                        # Replace the placeholders with the actual values
-                        table_row = table_format_string.format(
-                            epsilon=epsilon,
-                            delta=delta,
-                            dimension=dimension,
-                            ell_1_sensitivity=ell_1_sensitivity,
-                            ell_2_sensitivity=ell_2_sensitivity,
-                            ell_infity_sensitivity=ell_infity_sensitivity,
-                            quantization_scale=quantization_scale,
-                            num_bernoulli=num_bernoulli,
-                            err=err
-                        )
-                        # Print the table row
-                        print(table_row)
+#     for epsilon in epsilon_values:
+#         for delta in delta_values:
+
+    for (epsilon, delta) in epsilon_delta_values:
+        for dimension in dimension_values:
+            for per_user_credit_cap in per_user_credit_cap_values:
+                ell_1_sensitivity = per_user_credit_cap
+                ell_2_sensitivity = per_user_credit_cap
+                ell_infity_sensitivity = per_user_credit_cap
+                for quantization_scale in quantization_scale_values:
+                    num_bernoulli = find_smallest_N_binary_search(epsilon,p,delta,dimension,quantization_scale,ell_1_sensitivity,ell_2_sensitivity,ell_infity_sensitivity)
+                    err = error(num_bernoulli,p,dimension,quantization_scale)
+                    # Replace the placeholders with the actual values
+                    table_row = table_format_string.format(
+                        epsilon=epsilon,
+                        delta=delta,
+                        dimension=dimension,
+                        ell_1_sensitivity=ell_1_sensitivity,
+                        ell_2_sensitivity=ell_2_sensitivity,
+                        ell_infity_sensitivity=ell_infity_sensitivity,
+                        quantization_scale=quantization_scale,
+                        num_bernoulli=num_bernoulli,
+                        err=err
+                    )
+                    # Print the table row
+                    print(table_row)
 
 parameter_table()
 
