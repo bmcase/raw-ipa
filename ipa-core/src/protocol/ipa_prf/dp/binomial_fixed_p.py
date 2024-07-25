@@ -218,12 +218,12 @@ def walr(j,p):
 
 def parameter_table():
     print("printing parameter_table")
-    epsilon_values = [0.01,0.1,1,5,10]
+#     epsilon_values = [0.01,0.1,1,5,10]
+    epsilon_values = [5]
     delta_values = [10**(-9),10**(-8),10**(-7),10**(-6)]
-
     dimension_values = [1, 10, 100]
     per_user_credit_cap_values = [1,16,32,64]
-    quantization_scale_values = [1, 0.1, 0.01]
+    quantization_scale_values = [1, 0.5, 0.1, 0.05, 0.01, 0.005, 0.001]
 
     p = 0.5
     # Create a string with placeholders for the values
