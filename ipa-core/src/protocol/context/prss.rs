@@ -72,9 +72,9 @@ impl<'a, I: Iterator> Iterator for InstrumentedChunksIter<'a, I> {
 
 /// Wrapper for `SequentialSharedRandomness` that instrument calls to generate random values.
 pub struct InstrumentedSequentialSharedRandomness<'a> {
-    inner: SequentialSharedRandomness,
-    step: &'a Gate,
-    role: Role,
+    pub inner: SequentialSharedRandomness,
+    pub step: &'a Gate,
+    pub role: Role,
 }
 
 impl<'a> InstrumentedSequentialSharedRandomness<'a> {

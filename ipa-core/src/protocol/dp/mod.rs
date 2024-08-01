@@ -37,6 +37,7 @@ where
     OV: BooleanArray + U128Conversions,
     Replicated<Boolean, B>: BooleanProtocols<C, B>,
 {
+    println!("In gen_binomial_noise");
     // Step 1:  Generate Bernoulli's with PRSS
     // sample a stream of `total_bits = num_bernoulli * B` bit from PRSS where B is number of histogram bins
     // and num_bernoulli is the number of Bernoulli samples to sum to get a sample from a Binomial
