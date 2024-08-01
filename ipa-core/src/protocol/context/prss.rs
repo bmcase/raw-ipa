@@ -1,7 +1,7 @@
 //! Metric-aware PRSS decorators
 
 use generic_array::ArrayLength;
-use rand_core::{Error, RngCore};
+use rand_core::{CryptoRng, Error, RngCore};
 
 use crate::{
     helpers::Role,
@@ -108,3 +108,4 @@ impl RngCore for InstrumentedSequentialSharedRandomness<'_> {
         self.inner.try_fill_bytes(dest)
     }
 }
+impl CryptoRng for InstrumentedSequentialSharedRandomness<'_> {}

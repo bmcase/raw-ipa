@@ -284,13 +284,24 @@ where
 {
     println!("In sample_shared_randomness");
 
-    let (instrumented_seq_shared_rng_a,instrumented_seq_shared_rng_b) = ctx.prss_rng();
-    println!("ctx.role() {:?}", ctx.role());
-    println!("a.role {:?}", instrumented_seq_shared_rng_a.role );
-    println!("b.role {:?}", instrumented_seq_shared_rng_b.role );
-    let mut seq_shared_rng = instrumented_seq_shared_rng_a.inner;
+    // let (instrumented_seq_shared_rng_a
+    //     ,instrumented_seq_shared_rng_b) = ctx.prss_rng();
+    // println!("ctx.role() {:?}", ctx.role());
+    // println!("a.role {:?}", instrumented_seq_shared_rng_a.role );
+    // println!("b.role {:?}", instrumented_seq_shared_rng_b.role );
+    // let mut seq_shared_rng = instrumented_seq_shared_rng_a.inner;
     let oprf_padding = OPRFPaddingDp::new(1.0, 1e-6, 10_u32)?;
-    let sample = oprf_padding.sample(&mut seq_shared_rng);
+    // let sample = oprf_padding.sample(&mut seq_shared_rng);
+
+
+    // let (mut left, mut right ) = ctx.prss_rng();
+    // let samplewithleft = oprf_padding.sample(&mut left);
+    let (mut left, mut right ) = ctx.prss_rng();
+    let rng = if ctx.role()== Role::H1 {
+        &mut right
+    }else if ctx.role() == Role::H2 { &mut left } else { return Ok(0)};
+
+    let sample = oprf_padding.sample(rng);
 
     Ok(sample)
 }
