@@ -1,17 +1,14 @@
 mod distributions;
 mod insecure;
 
-use std::{cmp::max, f64};
-
 #[cfg(any(test, feature = "test-fixture", feature = "cli"))]
 pub use insecure::DiscreteDp as InsecureDiscreteDp;
-use rand::{rngs::ThreadRng, Rng};
+use rand::Rng;
 
 use crate::{
     helpers::{BytesStream, Role},
     protocol::{
         basics::Reshare,
-        context::prss::InstrumentedSequentialSharedRandomness,
         ipa_prf::{
             boolean_ops::expand_shared_array_in_place, oprf_padding::insecure::OPRFPaddingDp,
             shuffle::shuffled_to_oprfreport, OPRFIPAInputRow,
@@ -21,27 +18,24 @@ use crate::{
 };
 pub mod step;
 
-use futures_util::{stream, StreamExt};
+use futures_util::StreamExt;
+use typenum::Zero;
 
 use crate::{
-    error::{Error, LengthError},
+    error::Error,
     ff::{
         boolean::Boolean,
         boolean_array::{BooleanArray, BA112, BA64},
         ArrayAccess, U128Conversions,
     },
-    helpers::TotalRecords,
     protocol::{
-        boolean::step::SixteenBitStep,
         context::Context,
-        dp::step::DPStep,
-        ipa_prf::{aggregation::aggregate_values, boolean_ops::addition_sequential::integer_add},
         prss::{FromPrss, SharedRandomness},
-        BooleanProtocols, RecordId,
+        BooleanProtocols,
     },
     secret_sharing::{
-        replicated::semi_honest::{AdditiveShare as Replicated, AdditiveShare},
-        BitDecomposed, FieldSimd, SharedValue, TransposeFrom, Vectorizable,
+        replicated::semi_honest::AdditiveShare as Replicated, FieldSimd, SharedValue,
+        TransposeFrom, Vectorizable,
     },
 };
 
@@ -98,7 +92,7 @@ where
     }
 
     // generate what the random matchkeys will be
-    let mut dummy_mks: Vec<u64> = vec![];
+    let mut dummy_mks: Vec<BA64> = vec![];
     for _ in 0..number_unique_fake_matchkeys {
         dummy_mks.push(rng.gen())
     }
@@ -110,36 +104,20 @@ where
     let mut padding_input_rows: Vec<OPRFIPAInputRow<BK, TV, TS>> = Vec::new();
     for cardinality in 0..matchkey_cardinality_cap {
         for i in 0..cardinality {
-            // create an additive share of a boolean array
-            let mut y = AdditiveShare::new(BA112::ZERO, BA112::ZERO); // where YS=BA112 is the length of the boolean array needed to fit
-                                                                      // everything in an OPRFIPAInputRow
+            let match_key = match ctx.role() {
+                Role::H1 => Replicated::new(BA64::ZERO, dummy_mks[i]),
+                Role::H2 => Replicated::new(dummy_mks[i], BA64::ZERO),
+                Role::H3 => Replicated::new(BA64::ZERO, BA64::ZERO),
+            };
 
-            let mut boolean_array_of_mk = vec![];
-            if ctx.role() == Role::H1 || ctx.role() == Role::H2 {
-                boolean_array_of_mk = [dummy_mks[i]].map(Boolean::from).to_vec();
-            } else {
-                // Role::H3
-                boolean_array_of_mk = [0_u64].map(Boolean::from).to_vec();
-            }
-            expand_shared_array_in_place(&mut y, &boolean_array_of_mk, 0); // Q: do I need to do something so that this is just known to H_i and H_{i+1}?
-
-            let mut offset = BA64::BITS as usize;
-
-            y.set(offset, &TV::ZERO); // set trigger value to 0
-            offset += 1;
-
-            expand_shared_array_in_place(&mut y, &BK::ZERO, offset);
-
-            offset += BK::BITS as usize;
-            expand_shared_array_in_place(&mut y, &TV::ZERO, offset);
-
-            offset += TV::BITS as usize;
-            expand_shared_array_in_place(&mut y, &TS::ZERO, offset);
-
-            // then use shuffled_to_oprfreport to convert to an OPRFIPAInputRow
-            let oprf_input_row: OPRFIPAInputRow<BK, TV, TS> =
-                shuffled_to_oprfreport::<BA112, BK, TV, TS>(y);
-            padding_input_rows.push(oprf_input_row);
+            let row = OPRFIPAInputRow {
+                match_key,
+                is_trigger: Replicated::new(Boolean::FALSE, Boolean::FALSE),
+                breakdown_key: Replicated::new(BK::ZERO, BK::ZERO),
+                trigger_value: Replicated::new(TV::ZERO, TV::ZERO),
+                timestamp: Replicated::new(TS::ZERO, TS::ZERO),
+            };
+            padding_input_rows.push(row);
         }
     }
     Ok(input.extend(padding_input_rows))
