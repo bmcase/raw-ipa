@@ -60,3 +60,24 @@ where $X_1$ and $X_2$ are iid geometric variables with success probability $p = 
 
 ### Samples from the Truncated Double Geometric Distribution
 Once we can draw samples from a double geometric, we can sample from our desired truncated double geometric by sampling the double geometric with rejection if the sample lies outside the support set $\{0,...,2n\}$.
+
+# Padding Breakdowns Keys for New Aggregation
+A new aggregation protocol reveals the breakdown keys in the clear before aggregating the associated secret
+shared values.   This leaks the number of records for each breakdown key.  We can assume that there is a cap 
+enforced on the number of records for any one matchkey in IPA. Using this sensitivity we can then (with a desired epsilon,
+delta) generate a random padding number of dummy rows with each breakdown key. 
+
+# Generating Padding for Matchkeys and Breakdown keys together
+We need to add fake rows for matchkeys and fake rows for breakdown keys.  It makes sense to try and add the fake breakdown
+keys to the fake rows already being generated for fake matchkeys. But this approach has a couple challenges:  
+1. We shouldn't add any fake breakdown keys to fake matchkey rows when the matchkey is being added with cardinality equal to one.
+Because these rows can be dropped after matching and never have the fake breakdowns revealed. 
+2. There may need to be some adjustment made to the DP parameters achieved. TODO 
+3. We should not be adding fake breakdown keys to matchkeys that have a cardinality larger than the cap we have established for
+the number of breakdowns per user. Otherwise, those breakdown keys would never be revealed as they will be dropped. 
+
+Instead of this approach we will the fake rows for matchkey padding first and then the fake rows for breakdown key padding. When 
+we generate the fake rows for breakdown key padding, the fake matchkeys generated will all have cardinality two. 
+
+
+

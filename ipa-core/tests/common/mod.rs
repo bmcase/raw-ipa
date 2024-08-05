@@ -99,7 +99,7 @@ impl CommandExt for Command {
         // } else {
         //     self.arg("-vv")
         // }
-        return self
+        return self;
     }
 }
 
