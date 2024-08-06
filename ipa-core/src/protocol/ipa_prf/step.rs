@@ -13,9 +13,8 @@ pub(crate) enum IpaPrfStep {
     SortByTimestamp,
     #[step(child = crate::protocol::ipa_prf::prf_sharding::step::AttributionStep)]
     Attribution,
-    // #[step(child = crate::protocol::ipa_prf::oprf_padding::step::PaddingDpStep)]
-    // PaddingDp,
-    // PaddingDpStep,
+    #[step(child = crate::protocol::ipa_prf::oprf_padding::step::PaddingDpStep, name="padding_dp")]
+    PaddingDp,
 }
 
 #[derive(CompactStep)]

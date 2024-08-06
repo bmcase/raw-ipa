@@ -5,8 +5,11 @@ use std::f64::consts::E;
 use rand::distributions::{BernoulliError, Distribution};
 use rand_core::{CryptoRng, RngCore};
 
-use crate::protocol::ipa_prf::oprf_padding::distributions::{
-    BoxMuller, RoundedBoxMuller, TruncatedDoubleGeometric,
+use crate::{
+    error,
+    protocol::ipa_prf::oprf_padding::distributions::{
+        BoxMuller, RoundedBoxMuller, TruncatedDoubleGeometric,
+    },
 };
 
 #[derive(Debug, PartialEq, thiserror::Error)]

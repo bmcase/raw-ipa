@@ -1,41 +1,31 @@
 mod distributions;
 mod insecure;
-
-#[cfg(any(test, feature = "test-fixture", feature = "cli"))]
-pub use insecure::DiscreteDp as InsecureDiscreteDp;
-use rand::Rng;
-
-use crate::{
-    helpers::{BytesStream, Role},
-    protocol::{
-        basics::Reshare,
-        ipa_prf::{
-            boolean_ops::expand_shared_array_in_place, oprf_padding::insecure::OPRFPaddingDp,
-            shuffle::shuffled_to_oprfreport, OPRFIPAInputRow,
-        },
-    },
-    secret_sharing::replicated::ReplicatedSecretSharing,
-};
 pub mod step;
 
 use futures_util::StreamExt;
+#[cfg(any(test, feature = "test-fixture", feature = "cli"))]
+pub use insecure::DiscreteDp as InsecureDiscreteDp;
+use rand::Rng;
 use typenum::Zero;
 
 use crate::{
     error::Error,
     ff::{
         boolean::Boolean,
-        boolean_array::{BooleanArray, BA112, BA64},
+        boolean_array::{BooleanArray, BA64},
         ArrayAccess, U128Conversions,
     },
+    helpers::{BytesStream, Role},
     protocol::{
+        basics::Reshare,
         context::Context,
+        ipa_prf::{oprf_padding::insecure::OPRFPaddingDp, OPRFIPAInputRow},
         prss::{FromPrss, SharedRandomness},
         BooleanProtocols,
     },
     secret_sharing::{
-        replicated::semi_honest::AdditiveShare as Replicated, FieldSimd, SharedValue,
-        TransposeFrom, Vectorizable,
+        replicated::{semi_honest::AdditiveShare as Replicated, ReplicatedSecretSharing},
+        FieldSimd, SharedValue, TransposeFrom, Vectorizable,
     },
 };
 
