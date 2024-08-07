@@ -45,6 +45,31 @@ impl From<BernoulliError> for Error {
     }
 }
 
+impl From<Error> for error::Error {
+    fn from(err: Error) -> Self {
+        match err {
+            Error::BadEpsilon(value) => {
+                error::Error::DPPaddingError(format!("Epsilon value must be greater than {}, got {}", f64::MIN_POSITIVE, value))
+            },
+            Error::BadDelta(value) => {
+                error::Error::DPPaddingError(format!("Valid values for DP-delta are within {:?}, got: {}", f64::MIN_POSITIVE..1.0 - f64::MIN_POSITIVE, value))
+            },
+            Error::BadS(value) => {
+                error::Error::DPPaddingError(format!("Valid values for TruncatedDoubleGeometric are greater than {:?}, got: {}", f64::MIN_POSITIVE, value))
+            },
+            Error::BadGeometricProb(value) => {
+                error::Error::DPPaddingError(format!("Valid values for success probability in Geometric are greater than {:?}, got: {}", f64::MIN_POSITIVE, value))
+            },
+            Error::BadShiftValue(value) => {
+                error::Error::DPPaddingError(format!("Shift value over 1M -- likely don't need it that large and preventing to avoid any chance of overflow in Double Geometric sample, got: {value}"))
+            },
+            Error::BadSensitivity(value) => {
+                error::Error::DPPaddingError(format!("Sensitivity value over 1M -- likely don't need it that large and preventing to avoid any chance of overflow in Double Geometric sample, got: {value}"))
+            },
+        }
+    }
+}
+
 /// Applies DP to the inputs in the clear using continuous Gaussian noise. Works with floats only, so
 /// any trimming on values must be done externally.
 #[derive(Debug)]

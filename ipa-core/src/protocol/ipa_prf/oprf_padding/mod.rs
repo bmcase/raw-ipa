@@ -2,116 +2,113 @@ mod distributions;
 mod insecure;
 pub mod step;
 
-use futures_util::StreamExt;
 #[cfg(any(test, feature = "test-fixture", feature = "cli"))]
 pub use insecure::DiscreteDp as InsecureDiscreteDp;
 use rand::Rng;
-use typenum::Zero;
 
 use crate::{
     error::Error,
     ff::{
         boolean::Boolean,
         boolean_array::{BooleanArray, BA64},
-        ArrayAccess, U128Conversions,
     },
-    helpers::{BytesStream, Role},
+    helpers::Role,
     protocol::{
-        basics::Reshare,
         context::Context,
         ipa_prf::{oprf_padding::insecure::OPRFPaddingDp, OPRFIPAInputRow},
-        prss::{FromPrss, SharedRandomness},
-        BooleanProtocols,
     },
     secret_sharing::{
         replicated::{semi_honest::AdditiveShare as Replicated, ReplicatedSecretSharing},
-        FieldSimd, SharedValue, TransposeFrom, Vectorizable,
+        SharedValue,
     },
 };
 
-// pub async fn apply_dp_padding<C, BK, TV, TS, const B: usize>(
-//     ctx: C,
-//     mut input: Vec<OPRFIPAInputRow<BK, TV, TS>>,
-// ) -> Result<Vec<OPRFIPAInputRow<BK, TV, TS>>, Error>
-// where
-//     C: Context,
-//     BK: BooleanArray,
-//     TV: BooleanArray,
-//     TS: BooleanArray,
-// {
-//     // H1 and H2 will need to use PRSS to establish a common shared secret
-//     // then they will use this to see the rng which needs to be passed in to the
-//     // OPRF padding struct.  They will then both generate the same random noise for padding.
-//     // For the values they will follow a convension to get the values into secret shares (maybe
-//     // also using PRSS values). H3 will set to zero.
-//     let (mut left, mut right) = ctx.prss_rng();
-//     let rng = if ctx.role() == Role::H1 {
-//         &mut right
-//     } else if ctx.role() == Role::H2 {
-//         &mut left
-//     } else {
-//         return Ok(input);
-//     }; // TODO H3's behavior
-//
-//     // H_i samples how many dummies to create
-//     // padding for aggregation
-//     let aggregation_padding_sensitivity = 10; // document how set
-//     let aggregation_padding = OPRFPaddingDp::new(1.0, 1e-6, aggregation_padding_sensitivity)?;
-//
-//     let mut total_fake_breakdownkeys = 0;
-//     let num_breakdowns = B;
-//     let mut breakdown_cardinalities: Vec<_> = vec![];
-//     // for every breakdown, sample how many dummies will be added
-//     for _ in 0..num_breakdowns {
-//         let sample = aggregation_padding.sample(rng);
-//         breakdown_cardinalities.push(sample);
-//         total_fake_breakdownkeys += sample;
-//     }
-//
-//     // padding for oprf
-//     let mut number_unique_fake_matchkeys = 0;
-//     let matchkey_cardinality_cap = 10; // set by assumptions on capping that either happens on the device or is heuristic in IPA.
-//     let oprf_padding_sensitivity = 2; // document how set
-//     let oprf_padding = OPRFPaddingDp::new(1.0, 1e-6, oprf_padding_sensitivity)?;
-//     let mut matchkey_cardinalities: Vec<_> = vec![];
-//
-//     for _ in 0..matchkey_cardinality_cap {
-//         let sample = oprf_padding.sample(rng);
-//         matchkey_cardinalities.push(sample);
-//         number_unique_fake_matchkeys += sample;
-//     }
-//
-//     // generate what the random matchkeys will be
-//     let mut dummy_mks: Vec<BA64> = vec![];
-//     for _ in 0..number_unique_fake_matchkeys {
-//         dummy_mks.push(rng.gen())
-//     }
-//
-//     // H_i and H_{i+1} will generate the dummies
-//     // using reshare H_i will know the values and will reshare them with H_{i+1} (with H3 also generating PRSS shares as part
-//     // of reshare)
-//
-//     let mut padding_input_rows: Vec<OPRFIPAInputRow<BK, TV, TS>> = Vec::new();
-//     for cardinality in 0..matchkey_cardinality_cap {
-//         for i in 0..cardinality {
-//             let match_key = match ctx.role() {
-//                 Role::H1 => Replicated::new(BA64::ZERO, dummy_mks[i]),
-//                 Role::H2 => Replicated::new(dummy_mks[i], BA64::ZERO),
-//                 Role::H3 => Replicated::new(BA64::ZERO, BA64::ZERO),
-//             };
-//
-//             let row = OPRFIPAInputRow {
-//                 match_key,
-//                 is_trigger: Replicated::new(Boolean::FALSE, Boolean::FALSE),
-//                 breakdown_key: Replicated::new(BK::ZERO, BK::ZERO),
-//                 trigger_value: Replicated::new(TV::ZERO, TV::ZERO),
-//                 timestamp: Replicated::new(TS::ZERO, TS::ZERO),
-//             };
-//             padding_input_rows.push(row);
-//         }
-//     }
-//     Ok(input.extend(padding_input_rows))
-// }
+/// # Errors
+/// Will propogate errors from `OPRFPaddingDp`
+pub async fn apply_dp_padding<C, BK, TV, TS, const B: usize>(
+    ctx: C,
+    mut input: Vec<OPRFIPAInputRow<BK, TV, TS>>,
+) -> Result<Vec<OPRFIPAInputRow<BK, TV, TS>>, Error>
+where
+    C: Context,
+    BK: BooleanArray,
+    TV: BooleanArray,
+    TS: BooleanArray,
+{
+    // H1 and H2 will need to use PRSS to establish a common shared secret
+    // then they will use this to see the rng which needs to be passed in to the
+    // OPRF padding struct.  They will then both generate the same random noise for padding.
+    // For the values they will follow a convension to get the values into secret shares (maybe
+    // also using PRSS values). H3 will set to zero.
+    let (mut left, mut right) = ctx.prss_rng();
+    let rng = if ctx.role() == Role::H1 {
+        &mut right
+    } else if ctx.role() == Role::H2 {
+        &mut left
+    } else {
+        return Ok(input);
+    }; // TODO H3's behavior
+
+    // H_i samples how many dummies to create
+    // padding for aggregation
+    let aggregation_padding_sensitivity = 10; // document how set
+    let aggregation_padding = OPRFPaddingDp::new(1.0, 1e-6, aggregation_padding_sensitivity)?;
+
+    // let mut total_fake_breakdownkeys = 0;
+    let num_breakdowns = B;
+    let mut breakdown_cardinalities: Vec<_> = vec![];
+    // for every breakdown, sample how many dummies will be added
+    for _ in 0..num_breakdowns {
+        let sample = aggregation_padding.sample(rng);
+        breakdown_cardinalities.push(sample);
+        // total_fake_breakdownkeys += sample;
+    }
+
+    // padding for oprf
+    let mut number_unique_fake_matchkeys = 0;
+    let matchkey_cardinality_cap = 10; // set by assumptions on capping that either happens on the device or is heuristic in IPA.
+    let oprf_padding_sensitivity = 2; // document how set
+    let oprf_padding = OPRFPaddingDp::new(1.0, 1e-6, oprf_padding_sensitivity)?;
+    let mut matchkey_cardinalities: Vec<_> = vec![];
+
+    for _ in 0..matchkey_cardinality_cap {
+        let sample = oprf_padding.sample(rng);
+        matchkey_cardinalities.push(sample);
+        number_unique_fake_matchkeys += sample;
+    }
+
+    // generate what the random matchkeys will be
+    let mut dummy_mks: Vec<BA64> = vec![];
+    for _ in 0..number_unique_fake_matchkeys {
+        dummy_mks.push(rng.gen());
+    }
+
+    // H_i and H_{i+1} will generate the dummies
+    // using reshare H_i will know the values and will reshare them with H_{i+1} (with H3 also generating PRSS shares as part
+    // of reshare)
+
+    let mut padding_input_rows: Vec<OPRFIPAInputRow<BK, TV, TS>> = Vec::new();
+    for cardinality in 0..matchkey_cardinality_cap {
+        for i in 0..cardinality {
+            let match_key = match ctx.role() {
+                Role::H1 => Replicated::new(BA64::ZERO, dummy_mks[i]),
+                Role::H2 => Replicated::new(dummy_mks[i], BA64::ZERO),
+                Role::H3 => Replicated::new(BA64::ZERO, BA64::ZERO),
+            };
+
+            let row = OPRFIPAInputRow {
+                match_key,
+                is_trigger: Replicated::new(Boolean::FALSE, Boolean::FALSE),
+                breakdown_key: Replicated::new(BK::ZERO, BK::ZERO),
+                trigger_value: Replicated::new(TV::ZERO, TV::ZERO),
+                timestamp: Replicated::new(TS::ZERO, TS::ZERO),
+            };
+            padding_input_rows.push(row);
+        }
+    }
+    input.extend(padding_input_rows);
+    Ok(input)
+}
 
 pub async fn sample_shared_randomness<C>(ctx: C) -> Result<u32, insecure::Error>
 where
@@ -147,14 +144,8 @@ where
 #[cfg(all(test, unit_test))]
 mod tests {
     use crate::{
-        ff::{boolean_array::BA16, U128Conversions},
-        helpers::Role,
-        protocol::{
-            context::Context, dp::gen_binomial_noise,
-            ipa_prf::oprf_padding::sample_shared_randomness,
-        },
-        secret_sharing::{replicated::semi_honest::AdditiveShare, TransposeFrom},
-        test_fixture::{Reconstruct, Runner, TestWorld},
+        protocol::ipa_prf::oprf_padding::sample_shared_randomness,
+        test_fixture::{Runner, TestWorld},
     };
 
     #[tokio::test]
@@ -166,7 +157,7 @@ mod tests {
                 sample_shared_randomness::<_>(ctx).await
             })
             .await;
-        println!("result = {:?}", result);
+        println!("result = {result:?}", );
     }
 }
 

@@ -1,10 +1,9 @@
 use ipa_step_derive::CompactStep;
 
-use crate::protocol::ipa_prf::prf_sharding::step;
-use crate::protocol::ipa_prf::oprf_padding::step;
-
 #[derive(CompactStep)]
 pub(crate) enum IpaPrfStep {
+    // #[step(child = crate::protocol::ipa_prf::oprf_padding::step::PaddingDpStep, name="padding_dp")]
+    PaddingDp,
     #[step(child = crate::protocol::ipa_prf::shuffle::step::OPRFShuffleStep)]
     Shuffle,
     // ConvertInputRowsToPrf,
@@ -16,8 +15,6 @@ pub(crate) enum IpaPrfStep {
     SortByTimestamp,
     #[step(child = crate::protocol::ipa_prf::prf_sharding::step::AttributionStep)]
     Attribution,
-    #[step(child = crate::protocol::ipa_prf::oprf_padding::step::PaddingDpStep, name="padding_dp")]
-    PaddingDp,
 }
 
 #[derive(CompactStep)]

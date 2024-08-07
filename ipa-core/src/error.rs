@@ -82,6 +82,8 @@ pub enum Error {
     DZKPMasks,
     #[error("Attempt to operate on zero records")]
     ZeroRecords,
+    #[error("DP related error: {0}")]
+    DPPaddingError(String),
 }
 
 impl Default for Error {

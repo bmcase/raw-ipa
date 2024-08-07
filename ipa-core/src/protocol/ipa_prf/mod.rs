@@ -25,6 +25,7 @@ use crate::{
         },
         ipa_prf::{
             boolean_ops::convert_to_fp25519,
+            oprf_padding::apply_dp_padding,
             prf_eval::{eval_dy_prf, gen_prf_key},
             prf_sharding::{
                 attribute_cap_aggregate, histograms_ranges_sortkeys, PrfShardedIpaInputRow,
@@ -43,9 +44,9 @@ use crate::{
 
 pub(crate) mod aggregation;
 pub mod boolean_ops;
+pub mod oprf_padding;
 pub mod prf_eval;
 pub mod prf_sharding;
-pub mod oprf_padding;
 
 mod malicious_security;
 mod quicksort;
@@ -89,7 +90,10 @@ pub const SORT_CHUNK: usize = 256;
 
 use step::IpaPrfStep as Step;
 
-use crate::protocol::ipa_prf::oprf_padding::apply_dp_padding;
+// use crate::protocol;
+// use crate::protocol::ipa_prf;
+// use crate::protocol::ipa_prf::oprf_padding;
+// use crate::protocol::ipa_prf::prf_sharding::feature_label_dot_product;
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
@@ -242,13 +246,13 @@ where
     }
 
     // Apply DP padding
-    let input_rows_padded =
-        apply_dp_padding::<_, BK, TV, TS, B>(ctx.narrow(&Step::PaddingDpStep), input_rows).await?;
+    let padded_input_rows =
+        apply_dp_padding::<_, BK, TV, TS, B>(ctx.narrow(&Step::PaddingDp), input_rows).await?;
 
     // then use input_rows_added instead of input_rows below
     // TODO
 
-    let shuffled = shuffle_inputs(ctx.narrow(&Step::Shuffle), input_rows).await?;
+    let shuffled = shuffle_inputs(ctx.narrow(&Step::Shuffle), padded_input_rows).await?;
     let mut prfd_inputs = compute_prf_for_inputs(ctx.clone(), &shuffled).await?;
 
     prfd_inputs.sort_by(|a, b| a.prf_of_match_key.cmp(&b.prf_of_match_key));
