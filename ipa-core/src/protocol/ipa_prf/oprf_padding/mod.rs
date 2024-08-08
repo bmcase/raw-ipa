@@ -2,24 +2,37 @@ mod distributions;
 mod insecure;
 pub mod step;
 
+use std::{
+    error,
+    fmt::{Debug, Formatter},
+};
+
+use futures_util::SinkExt;
+use generic_array::GenericArray;
 #[cfg(any(test, feature = "test-fixture", feature = "cli"))]
 pub use insecure::DiscreteDp as InsecureDiscreteDp;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     error::Error,
     ff::{
         boolean::Boolean,
         boolean_array::{BooleanArray, BA64},
+        Serializable,
     },
-    helpers::Role,
+    helpers::{Direction, Role},
     protocol::{
         context::Context,
-        ipa_prf::{oprf_padding::insecure::OPRFPaddingDp, OPRFIPAInputRow},
+        ipa_prf::{
+            oprf_padding::{insecure::OPRFPaddingDp, step::PaddingDpStep},
+            OPRFIPAInputRow,
+        },
+        RecordId,
     },
     secret_sharing::{
         replicated::{semi_honest::AdditiveShare as Replicated, ReplicatedSecretSharing},
-        SharedValue,
+        Sendable, SharedValue,
     },
 };
 
@@ -121,16 +134,19 @@ where
         // using reshare H_i will know the values and will reshare them with H_{i+1} (with H3 also generating PRSS shares as part
         // of reshare)
     }
+
+    // TODO h_i and h_i_plus_one need to send total_number_of_fake_rows to the h_out
+    // party.
     assert!(total_number_of_fake_rows as usize == duplicated_dummy_mks.len());
 
     let mut padding_input_rows: Vec<OPRFIPAInputRow<BK, TV, TS>> = Vec::new();
-    for mk in duplicated_dummy_mks {
+    for i in 0..total_number_of_fake_rows as usize {
         let mut match_key_shares: Replicated<BA64> = Replicated::default();
         if ctx.role() == h_i {
-            match_key_shares = Replicated::new(BA64::ZERO, mk);
+            match_key_shares = Replicated::new(BA64::ZERO, duplicated_dummy_mks[i]);
         }
         if ctx.role() == h_i_plus_one {
-            match_key_shares = Replicated::new(mk, BA64::ZERO);
+            match_key_shares = Replicated::new(duplicated_dummy_mks[i], BA64::ZERO);
         }
         if ctx.role() == h_out {
             match_key_shares = Replicated::new(BA64::ZERO, BA64::ZERO);
@@ -150,6 +166,41 @@ where
     Ok(input)
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct NumberFakeRows {
+    number_fake_rows: u32,
+}
+
+impl Sendable for NumberFakeRows {}
+
+pub async fn send_to_helper<C>(ctx: C) -> Result<u32, Error>
+where
+    C: Context,
+{
+    let mut num_fake_rows = NumberFakeRows {
+        number_fake_rows: 0,
+    };
+
+    if ctx.role() == Role::H1 || ctx.role() == Role::H2 {
+        num_fake_rows.number_fake_rows = 20;
+    }
+
+    if ctx.role() == Role::H1 {
+        let send_channel = ctx.send_channel::<_>(ctx.role().peer(Direction::Left));
+        send_channel.send(RecordId::FIRST, num_fake_rows);
+        send_channel.close(RecordId::FIRST).await;
+    }
+
+    if ctx.role() == Role::H3 {
+        let recv_channel = ctx.recv_channel(ctx.role().peer(Direction::Right));
+        match recv_channel.receive(RecordId::FIRST).await {
+            Ok(v) => num_fake_rows = v,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(num_fake_rows.number_fake_rows)
+}
+
 #[cfg(all(test, unit_test))]
 mod tests {
     use crate::{
@@ -159,7 +210,9 @@ mod tests {
         protocol::{
             context::Context,
             ipa_prf::{
-                oprf_padding::{apply_dp_padding_pass, insecure, insecure::OPRFPaddingDp},
+                oprf_padding::{
+                    apply_dp_padding_pass, insecure, insecure::OPRFPaddingDp, send_to_helper,
+                },
                 OPRFIPAInputRow,
             },
         },
@@ -254,5 +307,13 @@ mod tests {
             })
             .await;
         println!("result = {result:?}",);
+    }
+
+    #[tokio::test]
+    pub async fn test_send_to_helper() {
+        let world = TestWorld::default();
+        let result = world
+            .semi_honest((), |ctx, ()| async move { send_to_helper::<_>(ctx).await })
+            .await;
     }
 }
