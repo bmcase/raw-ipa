@@ -2,26 +2,19 @@ mod distributions;
 mod insecure;
 pub mod step;
 
-use std::{
-    error,
-    fmt::{Debug, Formatter},
-};
-
 use futures_util::SinkExt;
-use generic_array::GenericArray;
 #[cfg(any(test, feature = "test-fixture", feature = "cli"))]
 pub use insecure::DiscreteDp as InsecureDiscreteDp;
 use rand::Rng;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     error::Error,
     ff::{
         boolean::Boolean,
-        boolean_array::{BooleanArray, BA64},
-        Serializable,
+        boolean_array::{BooleanArray, BA32, BA64},
+        U128Conversions,
     },
-    helpers::{Direction, Role},
+    helpers::{Direction, Role, TotalRecords},
     protocol::{
         context::Context,
         ipa_prf::{
@@ -32,7 +25,7 @@ use crate::{
     },
     secret_sharing::{
         replicated::{semi_honest::AdditiveShare as Replicated, ReplicatedSecretSharing},
-        Sendable, SharedValue,
+        SharedValue,
     },
 };
 
@@ -52,6 +45,10 @@ where
 {
     input =
         apply_dp_padding_pass::<C, BK, TV, TS, B>(ctx, input, Role::H1, Role::H2, Role::H3).await?;
+    // input =
+    //     apply_dp_padding_pass::<C, BK, TV, TS, B>(ctx, input, Role::H3, Role::H1, Role::H2).await?;
+    // input =
+    //     apply_dp_padding_pass::<C, BK, TV, TS, B>(ctx, input, Role::H2, Role::H3, Role::H1).await?;
 
     Ok(input)
 }
@@ -166,39 +163,42 @@ where
     Ok(input)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct NumberFakeRows {
-    number_fake_rows: u32,
-}
+// #[derive(Debug, Serialize, Deserialize)]
+// struct NumberFakeRows {
+//     number_fake_rows: u32,
+// }
+//
+// impl Sendable for NumberFakeRows {}
 
-impl Sendable for NumberFakeRows {}
-
-pub async fn send_to_helper<C>(ctx: C) -> Result<u32, Error>
+pub async fn send_to_helper<C>(ctx: C) -> Result<BA32, Error>
 where
     C: Context,
 {
-    let mut num_fake_rows = NumberFakeRows {
-        number_fake_rows: 0,
-    };
-
-    if ctx.role() == Role::H1 || ctx.role() == Role::H2 {
-        num_fake_rows.number_fake_rows = 20;
-    }
+    let mut num_fake_rows: BA32 = BA32::truncate_from(u128::try_from(0_u128).unwrap());
 
     if ctx.role() == Role::H1 {
-        let send_channel = ctx.send_channel::<_>(ctx.role().peer(Direction::Left));
-        send_channel.send(RecordId::FIRST, num_fake_rows);
-        send_channel.close(RecordId::FIRST).await;
+        num_fake_rows = BA32::truncate_from(u128::try_from(2_u128).unwrap());
+    }
+    if ctx.role() == Role::H2 {
+        num_fake_rows = BA32::truncate_from(u128::try_from(3_u128).unwrap());
+    }
+    let send_ctx = ctx
+        .narrow(&PaddingDpStep::H1Send)
+        .set_total_records(TotalRecords::ONE);
+    if ctx.role() == Role::H1 {
+        let send_channel = send_ctx.send_channel::<BA32>(send_ctx.role().peer(Direction::Left));
+        let _ = send_channel.send(RecordId::FIRST, num_fake_rows).await;
+        // send_channel.close(RecordId::FIRST).await;
     }
 
     if ctx.role() == Role::H3 {
-        let recv_channel = ctx.recv_channel(ctx.role().peer(Direction::Right));
+        let recv_channel = send_ctx.recv_channel(send_ctx.role().peer(Direction::Right));
         match recv_channel.receive(RecordId::FIRST).await {
             Ok(v) => num_fake_rows = v,
             Err(e) => return Err(e.into()),
         }
     }
-    Ok(num_fake_rows.number_fake_rows)
+    Ok(num_fake_rows)
 }
 
 #[cfg(all(test, unit_test))]
@@ -315,5 +315,7 @@ mod tests {
         let result = world
             .semi_honest((), |ctx, ()| async move { send_to_helper::<_>(ctx).await })
             .await;
+        // .map(Result::unwrap);
+        println!("result = {result:?}",);
     }
 }
