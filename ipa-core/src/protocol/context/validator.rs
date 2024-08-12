@@ -12,32 +12,35 @@ use crate::{
     ff::Field,
     helpers::{Direction, TotalRecords},
     protocol::{
-        basics::Reveal,
+        basics::{check_zero::malicious_check_zero, malicious_reveal},
         context::{
             step::{MaliciousProtocolStep as Step, ValidateStep},
-            Base, Context, MaliciousContext, UpgradableContext, UpgradedMaliciousContext,
+            Base, Context, MaliciousContext, UpgradedContext, UpgradedMaliciousContext,
             UpgradedSemiHonestContext,
         },
-        prss::SharedRandomness,
+        prss::{FromPrss, SharedRandomness},
         RecordId,
     },
     secret_sharing::{
         replicated::{
             malicious::{
                 AdditiveShare as MaliciousReplicated, DowngradeMalicious, ExtendableField,
+                ExtendableFieldSimd,
             },
             semi_honest::AdditiveShare as Replicated,
             ReplicatedSecretSharing,
         },
-        SharedValue,
+        FieldSimd, SharedValue,
     },
     sharding::ShardBinding,
     sync::{Arc, Mutex, Weak},
 };
 
 #[async_trait]
-pub trait Validator<B: UpgradableContext, F: ExtendableField> {
-    fn context(&self) -> B::UpgradedContext<F>;
+pub trait Validator<F: ExtendableField> {
+    type Context: UpgradedContext;
+
+    fn context(&self) -> Self::Context;
     async fn validate<D: DowngradeMalicious>(self, values: D) -> Result<D::Target, Error>;
 }
 
@@ -56,10 +59,10 @@ impl<'a, B: ShardBinding, F: ExtendableField> SemiHonest<'a, B, F> {
 }
 
 #[async_trait]
-impl<'a, B: ShardBinding, F: ExtendableField> Validator<super::semi_honest::Context<'a, B>, F>
-    for SemiHonest<'a, B, F>
-{
-    fn context(&self) -> UpgradedSemiHonestContext<'a, B, F> {
+impl<'a, B: ShardBinding, F: ExtendableField> Validator<F> for SemiHonest<'a, B, F> {
+    type Context = UpgradedSemiHonestContext<'a, B, F>;
+
+    fn context(&self) -> Self::Context {
         self.context.clone()
     }
 
@@ -137,21 +140,34 @@ pub struct MaliciousAccumulator<F: ExtendableField> {
 }
 
 impl<F: ExtendableField> MaliciousAccumulator<F> {
-    fn compute_dot_product_contribution(
-        a: &Replicated<F::ExtendedField>,
-        b: &Replicated<F::ExtendedField>,
-    ) -> F::ExtendedField {
-        (a.left() + a.right()) * (b.left() + b.right()) - a.right() * b.right()
+    fn compute_dot_product_contribution<const N: usize>(
+        a: &Replicated<F::ExtendedField, N>,
+        b: &Replicated<F::ExtendedField, N>,
+    ) -> F::ExtendedField
+    where
+        F::ExtendedField: FieldSimd<N>,
+    {
+        // TODO: clones exist here to satisfy trait bounds (Add(A, &A)) and we still can't express
+        // bounds on &Self references properly. See `RefOps` trait for details
+        let vectorized_share = (a.left_arr().clone() + a.right_arr())
+            * &(b.left_arr().clone() + b.right_arr())
+            - a.right_arr().clone() * b.right_arr();
+        vectorized_share
+            .into_iter()
+            .fold(F::ExtendedField::ZERO, |acc, x| acc + x)
     }
 
     /// ## Panics
     /// Will panic if the mutex is poisoned
-    pub fn accumulate_macs<I: SharedRandomness>(
+    pub fn accumulate_macs<I: SharedRandomness, const N: usize>(
         &self,
         prss: &I,
         record_id: RecordId,
-        input: &MaliciousReplicated<F>,
-    ) {
+        input: &MaliciousReplicated<F, N>,
+    ) where
+        F: ExtendableFieldSimd<N>,
+        Replicated<F::ExtendedField, N>: FromPrss,
+    {
         use crate::secret_sharing::replicated::malicious::ThisCodeIsAuthorizedToDowngradeFromMalicious;
 
         let x = input.x().access_without_downgrade();
@@ -169,12 +185,10 @@ impl<F: ExtendableField> MaliciousAccumulator<F> {
         // of the output wire of the k-th multiplication gate.
         // Then, the parties call `Ḟ_product` on vectors
         // `([[ᾶ_1]], . . . , [[ᾶ_N ]], [[β_1]], . . . , [[β_M]])` and `([[z_1]], . . . , [[z_N]], [[v_1]], . . . , [[v_M]])` to receive `[[ŵ]]`
-        let induced_share = Replicated::new(x.left().to_extended(), x.right().to_extended());
-
+        let induced_share = x.induced();
         let random_constant = prss.generate(record_id);
-        let u_contribution: F::ExtendedField =
-            Self::compute_dot_product_contribution(&random_constant, input.rx());
-        let w_contribution: F::ExtendedField =
+        let u_contribution = Self::compute_dot_product_contribution(&random_constant, input.rx());
+        let w_contribution =
             Self::compute_dot_product_contribution(&random_constant, &induced_share);
 
         let arc_mutex = self.inner.upgrade().unwrap();
@@ -195,9 +209,14 @@ pub struct Malicious<'a, F: ExtendableField> {
 }
 
 #[async_trait]
-impl<'a, F: ExtendableField> Validator<MaliciousContext<'a>, F> for Malicious<'a, F> {
+impl<'a, F> Validator<F> for Malicious<'a, F>
+where
+    F: ExtendableField,
+{
+    type Context = UpgradedMaliciousContext<'a, F>;
+
     /// Get a copy of the context that can be used for malicious protocol execution.
-    fn context<'b>(&'b self) -> UpgradedMaliciousContext<'a, F> {
+    fn context(&self) -> Self::Context {
         self.protocol_ctx.clone()
     }
 
@@ -220,7 +239,9 @@ impl<'a, F: ExtendableField> Validator<MaliciousContext<'a>, F> for Malicious<'a
             .narrow(&ValidateStep::RevealR)
             .set_total_records(TotalRecords::ONE);
         let r = <F as ExtendableField>::ExtendedField::from_array(
-            &self.r_share.reveal(narrow_ctx, RecordId::FIRST).await?,
+            &malicious_reveal(narrow_ctx, RecordId::FIRST, None, &self.r_share)
+                .await?
+                .expect("full reveal should always return a value"),
         );
         let t = u_share - &(w_share * r);
 
@@ -228,8 +249,7 @@ impl<'a, F: ExtendableField> Validator<MaliciousContext<'a>, F> for Malicious<'a
             .validate_ctx
             .narrow(&ValidateStep::CheckZero)
             .set_total_records(TotalRecords::ONE);
-        let is_valid =
-            crate::protocol::basics::check_zero(check_zero_ctx, RecordId::FIRST, &t).await?;
+        let is_valid = malicious_check_zero(check_zero_ctx, RecordId::FIRST, &t).await?;
 
         if is_valid {
             // Yes, we're allowed to downgrade here.
@@ -256,7 +276,7 @@ impl<'a, F: ExtendableField> Malicious<'a, F> {
         let accumulator = MaliciousAccumulator::<F> {
             inner: Arc::downgrade(&u_and_w),
         };
-        let validate_ctx = ctx.narrow(&Step::Validate).base_context();
+        let validate_ctx = ctx.narrow(&Step::Validate).validator_context();
         let protocol_ctx = ctx.upgrade(&Step::MaliciousProtocol, accumulator, r_share.clone());
         Self {
             r_share,
@@ -318,7 +338,7 @@ mod tests {
         helpers::Role,
         protocol::{
             basics::SecureMul,
-            context::{validator::Validator, Context, UpgradableContext, UpgradedContext},
+            context::{upgrade::Upgradable, validator::Validator, Context, UpgradableContext},
             RecordId,
         },
         rand::{thread_rng, Rng},
@@ -364,8 +384,10 @@ mod tests {
                 let v = ctx.validator();
                 let m_ctx = v.context();
 
-                let (a_malicious, b_malicious) =
-                    m_ctx.clone().upgrade((a_share, b_share)).await.unwrap();
+                let (a_malicious, b_malicious) = (a_share, b_share)
+                    .upgrade(m_ctx.set_total_records(1), RecordId::FIRST)
+                    .await
+                    .unwrap();
 
                 let m_result = a_malicious
                     .multiply(&b_malicious, m_ctx.set_total_records(1), RecordId::from(0))
@@ -405,7 +427,10 @@ mod tests {
         let result = world
             .malicious(a, |ctx, a| async move {
                 let v = ctx.validator();
-                let m = v.context().upgrade(a).await.unwrap();
+                let m = a
+                    .upgrade(v.context().set_total_records(1), RecordId::FIRST)
+                    .await
+                    .unwrap();
                 v.validate(m).await.unwrap()
             })
             .await;
@@ -429,7 +454,10 @@ mod tests {
                         a
                     };
                     let v = ctx.validator();
-                    let m = v.context().upgrade(a).await.unwrap();
+                    let m = a
+                        .upgrade(v.context().set_total_records(1), RecordId::FIRST)
+                        .await
+                        .unwrap();
                     match v.validate(m).await {
                         Ok(result) => panic!("Got a result {result:?}"),
                         Err(err) => assert!(matches!(err, Error::MaliciousSecurityCheckFailed)),
@@ -486,7 +514,10 @@ mod tests {
                 let v = ctx.validator();
                 let m_ctx = v.context();
 
-                let m_input = m_ctx.upgrade(input_shares).await.unwrap();
+                let m_input = input_shares
+                    .upgrade(m_ctx.set_total_records(1), RecordId::FIRST)
+                    .await
+                    .unwrap();
 
                 let m_results = m_ctx
                     .try_join(

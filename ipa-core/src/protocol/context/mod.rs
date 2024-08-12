@@ -17,12 +17,12 @@ use std::{collections::HashMap, iter, num::NonZeroUsize, pin::pin};
 
 use async_trait::async_trait;
 pub use dzkp_malicious::DZKPUpgraded as DZKPUpgradedMaliciousContext;
+pub use dzkp_semi_honest::DZKPUpgraded as DZKPUpgradedSemiHonestContext;
 use futures::{stream, Stream, StreamExt};
 use ipa_step::{Step, StepNarrow};
 pub use malicious::{Context as MaliciousContext, Upgraded as UpgradedMaliciousContext};
 use prss::{InstrumentedIndexedSharedRandomness, InstrumentedSequentialSharedRandomness};
 pub use semi_honest::Upgraded as UpgradedSemiHonestContext;
-pub use upgrade::{UpgradeContext, UpgradeToMalicious};
 pub use validator::Validator;
 pub type SemiHonestContext<'a, B = NotSharded> = semi_honest::Context<'a, B>;
 pub type ShardedSemiHonestContext<'a> = semi_honest::Context<'a, Sharded>;
@@ -38,10 +38,7 @@ use crate::{
         prss::{Endpoint as PrssEndpoint, SharedRandomness},
         Gate, RecordId,
     },
-    secret_sharing::{
-        replicated::{malicious::ExtendableField, semi_honest::AdditiveShare as Replicated},
-        SecretSharing,
-    },
+    secret_sharing::replicated::malicious::ExtendableField,
     seq_join::SeqJoin,
     sharding::{NotSharded, ShardBinding, ShardConfiguration, ShardIndex, Sharded},
 };
@@ -105,13 +102,11 @@ pub trait Context: Clone + Send + Sync + SeqJoin {
 }
 
 pub trait UpgradableContext: Context {
-    type UpgradedContext<F: ExtendableField>: UpgradedContext;
-    type Validator<F: ExtendableField>: Validator<Self, F>;
+    type Validator<F: ExtendableField>: Validator<F>;
 
     fn validator<F: ExtendableField>(self) -> Self::Validator<F>;
 
-    type DZKPUpgradedContext: DZKPContext;
-    type DZKPValidator: DZKPValidator<Self>;
+    type DZKPValidator: DZKPValidator;
 
     fn dzkp_validator(self, max_multiplications_per_gate: usize) -> Self::DZKPValidator;
 }
@@ -119,61 +114,6 @@ pub trait UpgradableContext: Context {
 #[async_trait]
 pub trait UpgradedContext: Context {
     type Field: ExtendableField;
-    type Share: SecretSharing<Self::Field> + 'static;
-
-    async fn upgrade_one(
-        &self,
-        record_id: RecordId,
-        x: Replicated<Self::Field>,
-    ) -> Result<Self::Share, Error>;
-
-    /// Upgrade an input using this context.
-    /// # Errors
-    /// When the multiplication fails. This does not include additive attacks
-    /// by other helpers.  These are caught later.
-    async fn upgrade<T, M>(&self, input: T) -> Result<M, Error>
-    where
-        T: Send,
-        UpgradeContext<Self>: UpgradeToMalicious<T, M>,
-    {
-        #[cfg(descriptive_gate)]
-        {
-            use crate::protocol::{context::step::UpgradeStep, NoRecord};
-
-            UpgradeContext::new(self.narrow(&UpgradeStep), NoRecord)
-                .upgrade(input)
-                .await
-        }
-        #[cfg(not(descriptive_gate))]
-        {
-            let _ = input;
-            unimplemented!()
-        }
-    }
-
-    /// Upgrade an input for a specific bit index and record using this context.
-    /// # Errors
-    /// When the multiplication fails. This does not include additive attacks
-    /// by other helpers.  These are caught later.
-    async fn upgrade_for<T, M>(&self, record_id: RecordId, input: T) -> Result<M, Error>
-    where
-        T: Send,
-        UpgradeContext<Self, RecordId>: UpgradeToMalicious<T, M>,
-    {
-        #[cfg(descriptive_gate)]
-        {
-            use crate::protocol::context::step::UpgradeStep;
-
-            UpgradeContext::new(self.narrow(&UpgradeStep), record_id)
-                .upgrade(input)
-                .await
-        }
-        #[cfg(not(descriptive_gate))]
-        {
-            let _ = (record_id, input);
-            unimplemented!()
-        }
-    }
 }
 
 pub trait SpecialAccessToUpgradedContext<F: ExtendableField>: UpgradedContext {
@@ -181,9 +121,6 @@ pub trait SpecialAccessToUpgradedContext<F: ExtendableField>: UpgradedContext {
     /// an associated type to avoid having to bind this trait to the lifetime
     /// associated with the `Base` struct.
     type Base: Context;
-
-    /// Take a secret sharing and add it to the running MAC that this context maintains (if any).
-    fn accumulate_macs(self, record_id: RecordId, x: &Self::Share);
 
     /// Get a base context that is an exact copy of this malicious
     /// context, so it will be tied up to the same step and prss.
@@ -552,15 +489,15 @@ mod tests {
 
     use crate::{
         ff::{
-            boolean_array::{BA3, BA8},
+            boolean_array::{BA3, BA64, BA8},
             Field, Fp31, Serializable, U128Conversions,
         },
         helpers::{Direction, Role},
         protocol::{
             basics::ShareKnownValue,
             context::{
-                reshard, step::MaliciousProtocolStep::MaliciousProtocol, Context, ShardedContext,
-                UpgradableContext, UpgradedContext, Validator,
+                reshard, step::MaliciousProtocolStep::MaliciousProtocol, upgrade::Upgradable,
+                Context, ShardedContext, UpgradableContext, Validator,
             },
             prss::SharedRandomness,
             RecordId,
@@ -731,13 +668,13 @@ mod tests {
         let input_size = input.len();
         let snapshot = world.metrics_snapshot();
 
-        // Malicious protocol has an amplification factor of 3 and constant overhead of 3. For each input row it
+        // Malicious protocol has an amplification factor of 3 and constant overhead of 5. For each input row it
         // (input size) upgrades input to malicious
         // (input size) executes toy protocol
         // (input size) propagates u and w
         // (1) multiply r * share of zero
-        // (2) reveals r (1 for check_zero, 1 for validate)
-        let comm_factor = |input_size| 3 * input_size + 3;
+        // (4) reveals r (2 for check_zero, 2 for validate)
+        let comm_factor = |input_size| 3 * input_size + 5;
         let records_sent_assert = snapshot
             .assert_metric(RECORDS_SENT)
             .total(3 * comm_factor(input_size))
@@ -789,9 +726,16 @@ mod tests {
                 // upgrade shares two times using different contexts
                 let v = ctx.validator();
                 let ctx = v.context().narrow("step1");
-                ctx.upgrade(shares.clone()).await.unwrap();
+                shares
+                    .clone()
+                    .upgrade(ctx.set_total_records(1), RecordId::FIRST)
+                    .await
+                    .unwrap();
                 let ctx = v.context().narrow("step2");
-                ctx.upgrade(shares).await.unwrap();
+                shares
+                    .upgrade(ctx.set_total_records(1), RecordId::FIRST)
+                    .await
+                    .unwrap();
             })
             .await;
     }
@@ -864,6 +808,29 @@ mod tests {
                 .collect::<Vec<_>>();
 
             assert_eq!(input, r);
+        });
+    }
+
+    #[test]
+    fn prss_one_side() {
+        run(|| async {
+            let input = ();
+            let world = TestWorld::default();
+
+            world
+                .semi_honest(input, |ctx, ()| async move {
+                    let left_value: BA64 = ctx
+                        .prss()
+                        .generate_one_side(RecordId::FIRST, Direction::Left);
+                    let right_value = ctx
+                        .prss()
+                        .generate_one_side(RecordId::FIRST, Direction::Right);
+
+                    Replicated::new(left_value, right_value)
+                })
+                .await
+                // reconstruct validates that sharings are valid
+                .reconstruct();
         });
     }
 }

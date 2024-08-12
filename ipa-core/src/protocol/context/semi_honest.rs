@@ -16,7 +16,7 @@ use crate::{
     },
     protocol::{
         context::{
-            dzkp_semi_honest::DZKPUpgraded, dzkp_validator::SemiHonestDZKPValidator,
+            dzkp_validator::SemiHonestDZKPValidator, upgrade::Upgradable,
             validator::SemiHonest as Validator, Base, InstrumentedIndexedSharedRandomness,
             InstrumentedSequentialSharedRandomness, ShardedContext, SpecialAccessToUpgradedContext,
             UpgradableContext, UpgradedContext,
@@ -24,8 +24,9 @@ use crate::{
         prss::Endpoint as PrssEndpoint,
         Gate, RecordId,
     },
-    secret_sharing::replicated::{
-        malicious::ExtendableField, semi_honest::AdditiveShare as Replicated,
+    secret_sharing::{
+        replicated::{malicious::ExtendableField, semi_honest::AdditiveShare as Replicated},
+        Vectorizable,
     },
     seq_join::SeqJoin,
     sharding::{NotSharded, ShardBinding, ShardConfiguration, ShardIndex, Sharded},
@@ -147,18 +148,15 @@ impl<'a, B: ShardBinding> super::Context for Context<'a, B> {
 }
 
 impl<'a, B: ShardBinding> UpgradableContext for Context<'a, B> {
-    type UpgradedContext<F: ExtendableField> = Upgraded<'a, B, F>;
     type Validator<F: ExtendableField> = Validator<'a, B, F>;
 
     fn validator<F: ExtendableField>(self) -> Self::Validator<F> {
         Self::Validator::new(self.inner)
     }
 
-    type DZKPUpgradedContext = DZKPUpgraded<'a, B>;
     type DZKPValidator = SemiHonestDZKPValidator<'a, B>;
 
-    #[allow(unused_variables)]
-    fn dzkp_validator(self, max_multiplications_per_gate: usize) -> Self::DZKPValidator {
+    fn dzkp_validator(self, _max_multiplications_per_gate: usize) -> Self::DZKPValidator {
         Self::DZKPValidator::new(self.inner)
     }
 }
@@ -267,25 +265,12 @@ impl<'a, B: ShardBinding, F: ExtendableField> SeqJoin for Upgraded<'a, B, F> {
 #[async_trait]
 impl<'a, B: ShardBinding, F: ExtendableField> UpgradedContext for Upgraded<'a, B, F> {
     type Field = F;
-    type Share = Replicated<F>;
-
-    async fn upgrade_one(
-        &self,
-        _record_id: RecordId,
-        x: Replicated<F>,
-    ) -> Result<Self::Share, Error> {
-        Ok(x)
-    }
 }
 
 impl<'a, B: ShardBinding, F: ExtendableField> SpecialAccessToUpgradedContext<F>
     for Upgraded<'a, B, F>
 {
     type Base = Base<'a, B>;
-
-    fn accumulate_macs(self, _record_id: RecordId, _x: &Replicated<F>) {
-        // noop
-    }
 
     fn base_context(self) -> Self::Base {
         self.inner
@@ -300,5 +285,20 @@ impl<B: ShardBinding, F: ExtendableField> Debug for Upgraded<'_, B, F> {
             type_name::<B>(),
             type_name::<F>()
         )
+    }
+}
+
+#[async_trait]
+impl<'a, V: ExtendableField + Vectorizable<N>, const N: usize>
+    Upgradable<Upgraded<'a, NotSharded, V>> for Replicated<V, N>
+{
+    type Output = Replicated<V, N>;
+
+    async fn upgrade(
+        self,
+        _context: Upgraded<'a, NotSharded, V>,
+        _record_id: RecordId,
+    ) -> Result<Self::Output, Error> {
+        Ok(self)
     }
 }
