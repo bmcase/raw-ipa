@@ -163,58 +163,24 @@ where
     Ok(input)
 }
 
-// #[derive(Debug, Serialize, Deserialize)]
-// struct NumberFakeRows {
-//     number_fake_rows: u32,
-// }
-//
-// impl Sendable for NumberFakeRows {}
-
-pub async fn send_to_helper<C>(ctx: C) -> Result<BA32, Error>
-where
-    C: Context,
-{
-    let mut num_fake_rows: BA32 = BA32::truncate_from(u128::try_from(0_u128).unwrap());
-
-    if ctx.role() == Role::H1 {
-        num_fake_rows = BA32::truncate_from(u128::try_from(2_u128).unwrap());
-    }
-    if ctx.role() == Role::H2 {
-        num_fake_rows = BA32::truncate_from(u128::try_from(3_u128).unwrap());
-    }
-    let send_ctx = ctx
-        .narrow(&PaddingDpStep::H1Send)
-        .set_total_records(TotalRecords::ONE);
-    if ctx.role() == Role::H1 {
-        let send_channel = send_ctx.send_channel::<BA32>(send_ctx.role().peer(Direction::Left));
-        let _ = send_channel.send(RecordId::FIRST, num_fake_rows).await;
-        // send_channel.close(RecordId::FIRST).await;
-    }
-
-    if ctx.role() == Role::H3 {
-        let recv_channel = send_ctx.recv_channel(send_ctx.role().peer(Direction::Right));
-        match recv_channel.receive(RecordId::FIRST).await {
-            Ok(v) => num_fake_rows = v,
-            Err(e) => return Err(e.into()),
-        }
-    }
-    Ok(num_fake_rows)
-}
-
 #[cfg(all(test, unit_test))]
 mod tests {
     use crate::{
         error::Error,
-        ff::boolean_array::{BooleanArray, BA8},
-        helpers::Role,
+        ff::{
+            boolean_array::{BooleanArray, BA32, BA8},
+            U128Conversions,
+        },
+        helpers::{Direction, Role, TotalRecords},
         protocol::{
             context::Context,
             ipa_prf::{
                 oprf_padding::{
-                    apply_dp_padding_pass, insecure, insecure::OPRFPaddingDp, send_to_helper,
+                    apply_dp_padding_pass, insecure, insecure::OPRFPaddingDp, step::PaddingDpStep,
                 },
                 OPRFIPAInputRow,
             },
+            RecordId,
         },
         test_fixture::Reconstruct,
     };
@@ -307,6 +273,37 @@ mod tests {
             })
             .await;
         println!("result = {result:?}",);
+    }
+
+    pub async fn send_to_helper<C>(ctx: C) -> Result<BA32, Error>
+    where
+        C: Context,
+    {
+        let mut num_fake_rows: BA32 = BA32::truncate_from(u128::try_from(0_u128).unwrap());
+
+        if ctx.role() == Role::H1 {
+            num_fake_rows = BA32::truncate_from(u128::try_from(2_u128).unwrap());
+        }
+        if ctx.role() == Role::H2 {
+            num_fake_rows = BA32::truncate_from(u128::try_from(3_u128).unwrap());
+        }
+        let send_ctx = ctx
+            .narrow(&PaddingDpStep::H1Send)
+            .set_total_records(TotalRecords::ONE);
+        if ctx.role() == Role::H1 {
+            let send_channel = send_ctx.send_channel::<BA32>(send_ctx.role().peer(Direction::Left));
+            let _ = send_channel.send(RecordId::FIRST, num_fake_rows).await;
+            // send_channel.close(RecordId::FIRST).await;
+        }
+
+        if ctx.role() == Role::H3 {
+            let recv_channel = send_ctx.recv_channel(send_ctx.role().peer(Direction::Right));
+            match recv_channel.receive(RecordId::FIRST).await {
+                Ok(v) => num_fake_rows = v,
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Ok(num_fake_rows)
     }
 
     #[tokio::test]
