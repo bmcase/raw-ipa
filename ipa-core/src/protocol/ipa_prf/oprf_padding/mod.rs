@@ -2,7 +2,6 @@ mod distributions;
 mod insecure;
 pub mod step;
 
-use futures_util::SinkExt;
 #[cfg(any(test, feature = "test-fixture", feature = "cli"))]
 pub use insecure::DiscreteDp as InsecureDiscreteDp;
 use rand::Rng;
@@ -85,7 +84,7 @@ where
     let matchkey_cardinality_cap = 10; // set by assumptions on capping that either happens on the device or is heuristic in IPA.
     let oprf_padding_sensitivity = 2; // document how set
     let mut total_number_of_fake_rows = 0;
-    let mut duplicated_dummy_mks: Vec<BA64> = vec![];
+    let mut padding_input_rows: Vec<OPRFIPAInputRow<BK, TV, TS>> = Vec::new();
 
     if ctx.role() != h_out {
         let (mut left, mut right) = ctx.prss_rng();
@@ -122,7 +121,22 @@ where
             for _ in 0..sample {
                 let dummy_mk: BA64 = rng.gen();
                 for _ in 0..cardinality {
-                    duplicated_dummy_mks.push(dummy_mk);
+                    let mut match_key_shares: Replicated<BA64> = Replicated::default();
+                    if ctx.role() == h_i {
+                        match_key_shares = Replicated::new(BA64::ZERO, dummy_mk);
+                    }
+                    if ctx.role() == h_i_plus_one {
+                        match_key_shares = Replicated::new(dummy_mk, BA64::ZERO);
+                    }
+
+                    let row = OPRFIPAInputRow {
+                        match_key: match_key_shares,
+                        is_trigger: Replicated::new(Boolean::FALSE, Boolean::FALSE),
+                        breakdown_key: Replicated::new(BK::ZERO, BK::ZERO),
+                        trigger_value: Replicated::new(TV::ZERO, TV::ZERO),
+                        timestamp: Replicated::new(TS::ZERO, TS::ZERO),
+                    };
+                    padding_input_rows.push(row);
                 }
             }
         }
@@ -132,31 +146,40 @@ where
         // of reshare)
     }
 
-    // TODO h_i and h_i_plus_one need to send total_number_of_fake_rows to the h_out
+    // h_i and h_i_plus_one need to send total_number_of_fake_rows to the h_out
     // party.
-    assert!(total_number_of_fake_rows as usize == duplicated_dummy_mks.len());
+    let send_ctx = ctx
+        .narrow(&PaddingDpStep::H1Send)
+        .set_total_records(TotalRecords::ONE);
+    if ctx.role() == Role::H1 {
+        let send_channel = send_ctx.send_channel::<BA32>(send_ctx.role().peer(Direction::Left));
+        let _ = send_channel
+            .send(
+                RecordId::FIRST,
+                BA32::truncate_from(u128::try_from(total_number_of_fake_rows).unwrap()),
+            )
+            .await;
+    }
 
-    let mut padding_input_rows: Vec<OPRFIPAInputRow<BK, TV, TS>> = Vec::new();
-    for i in 0..total_number_of_fake_rows as usize {
-        let mut match_key_shares: Replicated<BA64> = Replicated::default();
-        if ctx.role() == h_i {
-            match_key_shares = Replicated::new(BA64::ZERO, duplicated_dummy_mks[i]);
+    if ctx.role() == Role::H3 {
+        let recv_channel = send_ctx.recv_channel::<BA32>(send_ctx.role().peer(Direction::Right));
+        match recv_channel.receive(RecordId::FIRST).await {
+            Ok(v) => total_number_of_fake_rows = u32::try_from(v.as_u128()).unwrap(),
+            Err(e) => return Err(e.into()),
         }
-        if ctx.role() == h_i_plus_one {
-            match_key_shares = Replicated::new(duplicated_dummy_mks[i], BA64::ZERO);
-        }
-        if ctx.role() == h_out {
-            match_key_shares = Replicated::new(BA64::ZERO, BA64::ZERO);
-        }
+    }
 
-        let row = OPRFIPAInputRow {
-            match_key: match_key_shares,
-            is_trigger: Replicated::new(Boolean::FALSE, Boolean::FALSE),
-            breakdown_key: Replicated::new(BK::ZERO, BK::ZERO),
-            trigger_value: Replicated::new(TV::ZERO, TV::ZERO),
-            timestamp: Replicated::new(TS::ZERO, TS::ZERO),
-        };
-        padding_input_rows.push(row);
+    if ctx.role() == h_out {
+        for _ in 0..total_number_of_fake_rows as usize {
+            let row = OPRFIPAInputRow {
+                match_key: Replicated::new(BA64::ZERO, BA64::ZERO),
+                is_trigger: Replicated::new(Boolean::FALSE, Boolean::FALSE),
+                breakdown_key: Replicated::new(BK::ZERO, BK::ZERO),
+                trigger_value: Replicated::new(TV::ZERO, TV::ZERO),
+                timestamp: Replicated::new(TS::ZERO, TS::ZERO),
+            };
+            padding_input_rows.push(row);
+        }
     }
 
     input.extend(padding_input_rows);
@@ -297,7 +320,8 @@ mod tests {
         }
 
         if ctx.role() == Role::H3 {
-            let recv_channel = send_ctx.recv_channel(send_ctx.role().peer(Direction::Right));
+            let recv_channel =
+                send_ctx.recv_channel::<BA32>(send_ctx.role().peer(Direction::Right));
             match recv_channel.receive(RecordId::FIRST).await {
                 Ok(v) => num_fake_rows = v,
                 Err(e) => return Err(e.into()),
