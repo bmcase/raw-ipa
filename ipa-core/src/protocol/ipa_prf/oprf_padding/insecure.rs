@@ -250,6 +250,8 @@ impl OPRFPaddingDp {
 
 #[cfg(all(test, unit_test))]
 mod test {
+    use std::collections::BTreeMap;
+
     use proptest::{prelude::ProptestConfig, proptest};
     use rand::{rngs::StdRng, thread_rng, Rng};
     use rand_core::SeedableRng;
@@ -436,11 +438,21 @@ mod test {
     }
     #[test]
     fn test_oprf_padding_dp() {
-        let oprf_padding = OPRFPaddingDp::new(1.0, 1e-6, 10);
+        let oprf_padding = OPRFPaddingDp::new(1.0, 1e-6, 10).unwrap();
 
         let mut rng = rand::thread_rng();
 
-        oprf_padding.unwrap().sample(&mut rng);
+        let num_samples = 1000;
+        let mut count_sample_values: BTreeMap<u32, u32> = BTreeMap::new();
+
+        for _ in 0..num_samples {
+            let sample = oprf_padding.sample(&mut rng);
+            let sample_count = count_sample_values.entry(sample).or_insert(0);
+            *sample_count += 1;
+        }
+        for (sample, count) in &count_sample_values {
+            println!("A sample value equal to {sample} occurred {count} time(s)",);
+        }
     }
     fn test_oprf_padding_dp_constructor() {
         let mut actual = OPRFPaddingDp::new(-1.0, 1e-6, 10); // (epsilon, delta, sensitivity)

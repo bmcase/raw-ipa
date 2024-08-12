@@ -30,8 +30,8 @@ use crate::{
 
 /// # Errors
 /// Will propogate errors from `OPRFPaddingDp`
-/// # Panic
-/// todo
+/// # Panics
+/// Panics may happen in `apply_dp_padding_pass`
 pub async fn apply_dp_padding<C, BK, TV, TS, const B: usize>(
     ctx: C,
     mut input: Vec<OPRFIPAInputRow<BK, TV, TS>>,
@@ -52,10 +52,17 @@ where
     Ok(input)
 }
 
-/// Apple dp padding with one pair of helpers generating the noise
+/// Apply dp padding with one pair of helpers generating the noise
+/// Steps
+///     1.  Helpers `h_i` and `h_i_plus_one` will get the same rng from PRSS
+///         and use it to sample the same random noise for padding from `OPRFPaddingDp`.
+///         They will generate secret shares of these fake rows.
+///     2.  `h_i` and `h_i_plus_one` will send the send `total_number_of_fake_rows` to `h_out`
+///     3.  `h_out` will generate secret shares of zero for as many rows as the `total_number_of_fake_rows`
+///
 /// # Errors
 /// Will propogate errors from `OPRFPaddingDp`
-/// # Panic
+/// # Panics
 /// Will panic if called with Roles which are not all unique
 pub async fn apply_dp_padding_pass<C, BK, TV, TS, const B: usize>(
     ctx: C,
@@ -75,17 +82,14 @@ where
     assert!(h_i != h_out);
     assert!(h_out != h_i_plus_one);
 
-    // H_i and H_{i+1} will need to use PRSS to establish a common shared secret
-    // then they will use this to see the rng which needs to be passed in to the
-    // OPRF padding struct.  They will then both generate the same random noise for padding.
-    // For the values they will follow a convension to get the values into secret shares (maybe
-    // also using PRSS values). H3 will set to zero.
-
     let matchkey_cardinality_cap = 10; // set by assumptions on capping that either happens on the device or is heuristic in IPA.
     let oprf_padding_sensitivity = 2; // document how set
     let mut total_number_of_fake_rows = 0;
     let mut padding_input_rows: Vec<OPRFIPAInputRow<BK, TV, TS>> = Vec::new();
 
+    // Step 1: Helpers `h_i` and `h_i_plus_one` will get the same rng from PRSS
+    // and use it to sample the same random noise for padding from OPRFPaddingDp.
+    // They will generate secret shares of these fake rows.
     if ctx.role() != h_out {
         let (mut left, mut right) = ctx.prss_rng();
         let mut rng = &mut right;
@@ -111,7 +115,7 @@ where
         // }
 
         // padding for oprf
-        let oprf_padding = OPRFPaddingDp::new(10.0, 1e-6, oprf_padding_sensitivity)?;
+        let oprf_padding = OPRFPaddingDp::new(1.0, 1e-6, oprf_padding_sensitivity)?;
         for cardinality in 1..=matchkey_cardinality_cap {
             let sample = oprf_padding.sample(rng);
             total_number_of_fake_rows += sample * cardinality;
@@ -140,35 +144,50 @@ where
                 }
             }
         }
-
-        // H_i and H_{i+1} will generate the dummies
-        // using reshare H_i will know the values and will reshare them with H_{i+1} (with H3 also generating PRSS shares as part
-        // of reshare)
     }
 
-    // h_i and h_i_plus_one need to send total_number_of_fake_rows to the h_out
-    // party.
+    // Step 2: h_i and h_i_plus_one will send the send total_number_of_fake_rows to h_out
     let send_ctx = ctx
-        .narrow(&PaddingDpStep::H1Send)
+        .narrow(&PaddingDpStep::SendFakeNumRecords)
         .set_total_records(TotalRecords::ONE);
-    if ctx.role() == Role::H1 {
+    if ctx.role() == h_i {
         let send_channel = send_ctx.send_channel::<BA32>(send_ctx.role().peer(Direction::Left));
         let _ = send_channel
             .send(
                 RecordId::FIRST,
-                BA32::truncate_from(u128::try_from(total_number_of_fake_rows).unwrap()),
+                BA32::truncate_from(u128::from(total_number_of_fake_rows)),
             )
             .await;
     }
-
-    if ctx.role() == Role::H3 {
-        let recv_channel = send_ctx.recv_channel::<BA32>(send_ctx.role().peer(Direction::Right));
-        match recv_channel.receive(RecordId::FIRST).await {
-            Ok(v) => total_number_of_fake_rows = u32::try_from(v.as_u128()).unwrap(),
+    if ctx.role() == h_i_plus_one {
+        let send_channel = send_ctx.send_channel::<BA32>(send_ctx.role().peer(Direction::Right));
+        let _ = send_channel
+            .send(
+                RecordId::FIRST,
+                BA32::truncate_from(u128::from(total_number_of_fake_rows)),
+            )
+            .await;
+    }
+    if ctx.role() == h_out {
+        // receive `total_number_of_fake_rows` from both other helpers and make sure they are the same
+        let recv_channel_right =
+            send_ctx.recv_channel::<BA32>(send_ctx.role().peer(Direction::Right));
+        let from_right = match recv_channel_right.receive(RecordId::FIRST).await {
+            Ok(v) => u32::try_from(v.as_u128()).unwrap(),
             Err(e) => return Err(e.into()),
-        }
+        };
+
+        let recv_channel_left =
+            send_ctx.recv_channel::<BA32>(send_ctx.role().peer(Direction::Left));
+        let from_left = match recv_channel_left.receive(RecordId::FIRST).await {
+            Ok(v) => u32::try_from(v.as_u128()).unwrap(),
+            Err(e) => return Err(e.into()),
+        };
+        assert_eq!(from_right, from_left);
+        total_number_of_fake_rows = from_right;
     }
 
+    // Step 3: `h_out` will generate secret shares of zero for as many rows as the `total_number_of_fake_rows`
     if ctx.role() == h_out {
         for _ in 0..total_number_of_fake_rows as usize {
             let row = OPRFIPAInputRow {
@@ -188,6 +207,8 @@ where
 
 #[cfg(all(test, unit_test))]
 mod tests {
+    use std::collections::{BTreeMap, HashMap};
+
     use crate::{
         error::Error,
         ff::{
@@ -198,18 +219,12 @@ mod tests {
         protocol::{
             context::Context,
             ipa_prf::{
-                oprf_padding::{
-                    apply_dp_padding_pass, insecure, insecure::OPRFPaddingDp, step::PaddingDpStep,
-                },
+                oprf_padding::{apply_dp_padding_pass, insecure, insecure::OPRFPaddingDp},
                 OPRFIPAInputRow,
             },
             RecordId,
         },
-        test_fixture::Reconstruct,
-    };
-    use crate::{
-        // protocol::ipa_prf::oprf_padding::sample_shared_randomness,
-        test_fixture::{Runner, TestWorld},
+        test_fixture::{Reconstruct, Runner, TestWorld},
     };
 
     pub async fn set_up_apply_dp_padding_pass<C, BK, TV, TS, const B: usize>(
@@ -222,12 +237,8 @@ mod tests {
         TS: BooleanArray,
     {
         let mut input: Vec<OPRFIPAInputRow<BK, TV, TS>> = Vec::new();
-
-        // input =
-        //     apply_dp_padding_pass::<C, BK, TV, TS, B>(ctx, input, Role::H1, Role::H2, Role::H3).await?;
-        input = apply_dp_padding_pass::<C, BK, TV, TS, B>(ctx, input, Role::H3, Role::H1, Role::H2)
+        input = apply_dp_padding_pass::<C, BK, TV, TS, B>(ctx, input, Role::H1, Role::H2, Role::H3)
             .await?;
-
         Ok(input)
     }
 
@@ -246,30 +257,48 @@ mod tests {
             .await
             .map(Result::unwrap);
         // for Role::H1, Role::H2, Role::H3
-        // println!("result[0][0] = {:?}",result[0][0]);
-        // println!("");
-        // println!("result[1][0] = {:?}",result[1][0]);
-        // println!("");
-        // println!("result[2] = {:?}",result[2]);
-
-        //  for Role::H3, Role::H1, Role::H2
         println!("result[0][0] = {:?}", result[0][0]);
-        println!("***************");
-        println!("result[1] = {:?}", result[1]);
-        println!("***************");
+        println!("result[1][0] = {:?}", result[1][0]);
         println!("result[2][0] = {:?}", result[2][0]);
-        println!("***************");
+        // check that all three helpers added the same number of dummy shares
+        assert!(result[0].len() == result[1].len() && result[0].len() == result[2].len());
 
         let result_reconstructed = result.reconstruct();
+        // check that all fields besides the matchkey are zero and matchkey is not zero
+        let mut user_id_counts: HashMap<u64, u32> = HashMap::new();
+        for row in result_reconstructed {
+            // println!("{row:?}");
+            assert!(row.timestamp == 0);
+            assert!(row.trigger_value == 0);
+            assert!(!row.is_trigger_report);
+            assert!(row.breakdown_key == 0);
+            assert!(row.user_id != 0);
 
-        // for row in result_reconstructed.iter().take(5) {
-        //     println!("{row:?}",);
-        // }
+            let count = user_id_counts.entry(row.user_id).or_insert(0);
+            *count += 1;
+        }
+        // Now look at now many times a user_id occured
+        let mut sample_per_cardinality: BTreeMap<u32, u32> = BTreeMap::new();
+        for cardinality in user_id_counts.values() {
+            let count = sample_per_cardinality.entry(*cardinality).or_insert(0);
+            *count += 1;
+        }
+        let mut distribution_of_samples: BTreeMap<u32, u32> = BTreeMap::new();
+
+        for (cardinality, sample) in sample_per_cardinality {
+            println!("{sample} user IDs occurred {cardinality} time(s)");
+            let count = distribution_of_samples.entry(sample).or_insert(0);
+            *count += 1;
+        }
+
+        for (sample, count) in &distribution_of_samples {
+            println!("An OPRFPadding sample value equal to {sample} occurred {count} time(s)",);
+        }
     }
 
     /// # Errors
     /// Will propogate errors from `OPRFPaddingDp`
-    pub async fn sample_shared_randomness<C>(ctx: C) -> Result<u32, insecure::Error>
+    pub fn sample_shared_randomness<C>(ctx: &C) -> Result<u32, insecure::Error>
     where
         C: Context,
     {
@@ -291,9 +320,10 @@ mod tests {
         println!("in test_sample_shared_randomness");
         let world = TestWorld::default();
         let result = world
-            .semi_honest((), |ctx, ()| async move {
-                sample_shared_randomness::<_>(ctx).await
-            })
+            .semi_honest(
+                (),
+                |ctx, ()| async move { sample_shared_randomness::<_>(&ctx) },
+            )
             .await;
         println!("result = {result:?}",);
     }
@@ -302,17 +332,15 @@ mod tests {
     where
         C: Context,
     {
-        let mut num_fake_rows: BA32 = BA32::truncate_from(u128::try_from(0_u128).unwrap());
+        let mut num_fake_rows: BA32 = BA32::truncate_from(u128::try_from(0).unwrap());
 
         if ctx.role() == Role::H1 {
-            num_fake_rows = BA32::truncate_from(u128::try_from(2_u128).unwrap());
+            num_fake_rows = BA32::truncate_from(u128::try_from(2).unwrap());
         }
         if ctx.role() == Role::H2 {
-            num_fake_rows = BA32::truncate_from(u128::try_from(3_u128).unwrap());
+            num_fake_rows = BA32::truncate_from(u128::try_from(3).unwrap());
         }
-        let send_ctx = ctx
-            .narrow(&PaddingDpStep::H1Send)
-            .set_total_records(TotalRecords::ONE);
+        let send_ctx = ctx.set_total_records(TotalRecords::ONE);
         if ctx.role() == Role::H1 {
             let send_channel = send_ctx.send_channel::<BA32>(send_ctx.role().peer(Direction::Left));
             let _ = send_channel.send(RecordId::FIRST, num_fake_rows).await;
