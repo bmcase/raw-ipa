@@ -17,7 +17,10 @@ use crate::{
     protocol::{
         context::Context,
         ipa_prf::{
-            oprf_padding::{insecure::OPRFPaddingDp, step::PaddingDpStep},
+            oprf_padding::{
+                insecure::OPRFPaddingDp,
+                step::{PaddingDpStep, SendTotalRows},
+            },
             OPRFIPAInputRow,
         },
         RecordId,
@@ -42,12 +45,35 @@ where
     TV: BooleanArray,
     TS: BooleanArray,
 {
-    input = apply_dp_padding_pass::<C, BK, TV, TS, B>(&ctx, input, Role::H1, Role::H2, Role::H3)
-        .await?;
-    input = apply_dp_padding_pass::<C, BK, TV, TS, B>(&ctx, input, Role::H3, Role::H1, Role::H2)
-        .await?;
-    input = apply_dp_padding_pass::<C, BK, TV, TS, B>(&ctx, input, Role::H2, Role::H3, Role::H1)
-        .await?;
+    // H1 and H2 add padding noise
+    input = apply_dp_padding_pass::<C, BK, TV, TS, B>(
+        ctx.narrow(&PaddingDpStep::PaddingDpPass1),
+        input,
+        Role::H1,
+        Role::H2,
+        Role::H3,
+    )
+    .await?;
+
+    // H3 and H1 add padding noise
+    input = apply_dp_padding_pass::<C, BK, TV, TS, B>(
+        ctx.narrow(&PaddingDpStep::PaddingDpPass2),
+        input,
+        Role::H3,
+        Role::H1,
+        Role::H2,
+    )
+    .await?;
+
+    // H2 and H3 add padding noise
+    input = apply_dp_padding_pass::<C, BK, TV, TS, B>(
+        ctx.narrow(&PaddingDpStep::PaddingDpPass3),
+        input,
+        Role::H2,
+        Role::H3,
+        Role::H1,
+    )
+    .await?;
 
     Ok(input)
 }
@@ -65,7 +91,7 @@ where
 /// # Panics
 /// Will panic if called with Roles which are not all unique
 pub async fn apply_dp_padding_pass<C, BK, TV, TS, const B: usize>(
-    ctx: &C,
+    ctx: C,
     mut input: Vec<OPRFIPAInputRow<BK, TV, TS>>,
     h_i: Role,
     h_i_plus_one: Role,
@@ -77,6 +103,7 @@ where
     TV: BooleanArray,
     TS: BooleanArray,
 {
+    println!("starting pass by helpers {:?} and {:?}", h_i, h_i_plus_one);
     // assert roles are all unique
     assert!(h_i != h_i_plus_one);
     assert!(h_i != h_out);
@@ -148,7 +175,7 @@ where
 
     // Step 2: h_i and h_i_plus_one will send the send total_number_of_fake_rows to h_out
     let send_ctx = ctx
-        .narrow(&PaddingDpStep::SendFakeNumRecords)
+        .narrow(&SendTotalRows::SendFakeNumRecords)
         .set_total_records(TotalRecords::ONE);
     if ctx.role() == h_i {
         let send_channel = send_ctx.send_channel::<BA32>(send_ctx.role().peer(Direction::Left));
@@ -188,6 +215,7 @@ where
     }
 
     // Step 3: `h_out` will generate secret shares of zero for as many rows as the `total_number_of_fake_rows`
+    println!("total_number_of_fake_rows = {total_number_of_fake_rows}");
     if ctx.role() == h_out {
         for _ in 0..total_number_of_fake_rows as usize {
             let row = OPRFIPAInputRow {
@@ -237,9 +265,8 @@ mod tests {
         TS: BooleanArray,
     {
         let mut input: Vec<OPRFIPAInputRow<BK, TV, TS>> = Vec::new();
-        input =
-            apply_dp_padding_pass::<C, BK, TV, TS, B>(&ctx, input, Role::H1, Role::H2, Role::H3)
-                .await?;
+        input = apply_dp_padding_pass::<C, BK, TV, TS, B>(ctx, input, Role::H1, Role::H2, Role::H3)
+            .await?;
         Ok(input)
     }
 
