@@ -421,7 +421,7 @@ pub mod tests {
                 test_input(10, 12345, true, 0, 5),
                 test_input(0, 68362, false, 1, 0),
                 test_input(20, 68362, true, 0, 2),
-            ];
+            ]; // trigger value of 2 attributes to earlier source row with breakdown 1.
             let dp_params = DpMechanism::NoDp;
 
             let mut result: Vec<_> = world
@@ -437,12 +437,22 @@ pub mod tests {
                 result.iter().map(|&v| v.as_u128()).collect::<Vec<_>>(),
                 EXPECTED,
             );
+
+            for (index, actual) in result.iter().enumerate() {
+                println!(
+                    "actual = {}, expected = {}",
+                    u32::try_from(actual.as_u128()).unwrap(),
+                    EXPECTED[index]
+                );
+            }
         });
     }
 
     #[test]
     fn semi_honest_with_dp() {
         const SS_BITS: usize = 1;
+        // setting SS_BITS this small will cause clipping in capping
+        // since per_user_credit_cap == 2^SS_BITS
         semi_honest_with_dp_internal::<SS_BITS>();
     }
     #[test]

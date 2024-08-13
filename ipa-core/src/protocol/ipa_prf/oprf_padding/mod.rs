@@ -42,12 +42,12 @@ where
     TV: BooleanArray,
     TS: BooleanArray,
 {
-    input =
-        apply_dp_padding_pass::<C, BK, TV, TS, B>(ctx, input, Role::H1, Role::H2, Role::H3).await?;
-    // input =
-    //     apply_dp_padding_pass::<C, BK, TV, TS, B>(ctx, input, Role::H3, Role::H1, Role::H2).await?;
-    // input =
-    //     apply_dp_padding_pass::<C, BK, TV, TS, B>(ctx, input, Role::H2, Role::H3, Role::H1).await?;
+    input = apply_dp_padding_pass::<C, BK, TV, TS, B>(&ctx, input, Role::H1, Role::H2, Role::H3)
+        .await?;
+    input = apply_dp_padding_pass::<C, BK, TV, TS, B>(&ctx, input, Role::H3, Role::H1, Role::H2)
+        .await?;
+    input = apply_dp_padding_pass::<C, BK, TV, TS, B>(&ctx, input, Role::H2, Role::H3, Role::H1)
+        .await?;
 
     Ok(input)
 }
@@ -65,7 +65,7 @@ where
 /// # Panics
 /// Will panic if called with Roles which are not all unique
 pub async fn apply_dp_padding_pass<C, BK, TV, TS, const B: usize>(
-    ctx: C,
+    ctx: &C,
     mut input: Vec<OPRFIPAInputRow<BK, TV, TS>>,
     h_i: Role,
     h_i_plus_one: Role,
@@ -237,8 +237,9 @@ mod tests {
         TS: BooleanArray,
     {
         let mut input: Vec<OPRFIPAInputRow<BK, TV, TS>> = Vec::new();
-        input = apply_dp_padding_pass::<C, BK, TV, TS, B>(ctx, input, Role::H1, Role::H2, Role::H3)
-            .await?;
+        input =
+            apply_dp_padding_pass::<C, BK, TV, TS, B>(&ctx, input, Role::H1, Role::H2, Role::H3)
+                .await?;
         Ok(input)
     }
 
