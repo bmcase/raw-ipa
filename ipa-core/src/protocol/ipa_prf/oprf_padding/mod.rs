@@ -90,6 +90,7 @@ where
 /// Will propogate errors from `OPRFPaddingDp`
 /// # Panics
 /// Will panic if called with Roles which are not all unique
+#[deny(clippy::too_many_lines)]
 pub async fn apply_dp_padding_pass<C, BK, TV, TS, const B: usize>(
     ctx: C,
     mut input: Vec<OPRFIPAInputRow<BK, TV, TS>>,
@@ -103,14 +104,13 @@ where
     TV: BooleanArray,
     TS: BooleanArray,
 {
-    println!("starting pass by helpers {:?} and {:?}", h_i, h_i_plus_one);
     // assert roles are all unique
     assert!(h_i != h_i_plus_one);
     assert!(h_i != h_out);
     assert!(h_out != h_i_plus_one);
 
     let matchkey_cardinality_cap = 10; // set by assumptions on capping that either happens on the device or is heuristic in IPA.
-    let oprf_padding_sensitivity = 2; // document how set
+    let oprf_padding_sensitivity = 2; // since using replacement neighboring definition
     let mut total_number_of_fake_rows = 0;
     let mut padding_input_rows: Vec<OPRFIPAInputRow<BK, TV, TS>> = Vec::new();
 
@@ -119,6 +119,7 @@ where
     // They will generate secret shares of these fake rows.
     if ctx.role() != h_out {
         let (mut left, mut right) = ctx.prss_rng();
+        // The first is shared with the helper to the "left", the second is shared with the helper to the "right".
         let mut rng = &mut right;
         if ctx.role() == h_i {
             rng = &mut right;
@@ -159,7 +160,6 @@ where
                     if ctx.role() == h_i_plus_one {
                         match_key_shares = Replicated::new(dummy_mk, BA64::ZERO);
                     }
-
                     let row = OPRFIPAInputRow {
                         match_key: match_key_shares,
                         is_trigger: Replicated::new(Boolean::FALSE, Boolean::FALSE),
@@ -215,7 +215,6 @@ where
     }
 
     // Step 3: `h_out` will generate secret shares of zero for as many rows as the `total_number_of_fake_rows`
-    println!("total_number_of_fake_rows = {total_number_of_fake_rows}");
     if ctx.role() == h_out {
         for _ in 0..total_number_of_fake_rows as usize {
             let row = OPRFIPAInputRow {
