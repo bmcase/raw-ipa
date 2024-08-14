@@ -53,14 +53,6 @@ pub enum OPRFPadding {
         oprf_padding_sensitivity: u32,
     },
 }
-// impl Default for PaddingParameters {
-//     fn default() -> Self {
-//         PaddingParameters {
-//             aggregation_padding: AggregationPadding::default(),
-//             oprf_padding: OPRFPadding::default(),
-//         }
-//     }
-// }
 
 impl Default for AggregationPadding {
     fn default() -> Self {
@@ -461,7 +453,7 @@ mod tests {
     }
 
     #[tokio::test]
-    pub async fn test_oprf_noise_in_dp_padding_pass() {
+    pub async fn oprf_noise_in_dp_padding_pass() {
         type BK = BA8;
         type TV = BA3;
         type TS = BA20;
@@ -487,10 +479,6 @@ mod tests {
             })
             .await
             .map(Result::unwrap);
-        // for Role::H1, Role::H2, Role::H3
-        println!("result[0][0] = {:?}", result[0][0]);
-        println!("result[1][0] = {:?}", result[1][0]);
-        println!("result[2][0] = {:?}", result[2][0]);
         // check that all three helpers added the same number of dummy shares
         assert!(result[0].len() == result[1].len() && result[0].len() == result[2].len());
 
@@ -538,7 +526,7 @@ mod tests {
     }
 
     #[tokio::test]
-    pub async fn test_aggregation_noise_in_dp_padding_pass() {
+    pub async fn aggregation_noise_in_dp_padding_pass() {
         type BK = BA8;
         type TV = BA3;
         type TS = BA20;
@@ -611,6 +599,8 @@ mod tests {
             );
         }
     }
+
+
 
     /// # Errors
     /// Will propogate errors from `OPRFPaddingDp`
