@@ -31,6 +31,7 @@ use crate::{
     },
 };
 
+#[derive(Default)]
 pub struct PaddingParameters {
     aggregation_padding: AggregationPadding,
     oprf_padding: OPRFPadding,
@@ -52,14 +53,14 @@ pub enum OPRFPadding {
         oprf_padding_sensitivity: u32,
     },
 }
-impl Default for PaddingParameters {
-    fn default() -> Self {
-        PaddingParameters {
-            aggregation_padding: AggregationPadding::default(),
-            oprf_padding: OPRFPadding::default(),
-        }
-    }
-}
+// impl Default for PaddingParameters {
+//     fn default() -> Self {
+//         PaddingParameters {
+//             aggregation_padding: AggregationPadding::default(),
+//             oprf_padding: OPRFPadding::default(),
+//         }
+//     }
+// }
 
 impl Default for AggregationPadding {
     fn default() -> Self {
@@ -145,7 +146,6 @@ where
 /// Will propogate errors from `OPRFPaddingDp`
 /// # Panics
 /// Will panic if called with Roles which are not all unique
-#[deny(clippy::too_many_lines)]
 pub async fn apply_dp_padding_pass<C, BK, TV, TS, const B: usize>(
     ctx: C,
     mut input: Vec<OPRFIPAInputRow<BK, TV, TS>>,
@@ -179,7 +179,7 @@ where
             &mut padding_input_rows,
             h_i,
             h_i_plus_one,
-            &padding_params,
+            padding_params,
         )?;
     }
 
@@ -345,86 +345,72 @@ where
                 for _ in 0..q {
                     dummy_mk = rng.gen();
                     for _ in 0..2 {
-                        let mut match_key_shares: Replicated<BA64> = Replicated::default();
-                        if ctx.role() == h_i {
-                            match_key_shares = Replicated::new(BA64::ZERO, dummy_mk);
-                        }
-                        if ctx.role() == h_i_plus_one {
-                            match_key_shares = Replicated::new(dummy_mk, BA64::ZERO);
-                        }
-
-                        let mut breakdownkey_shares: Replicated<BK> = Replicated::default();
-                        if ctx.role() == h_i {
-                            breakdownkey_shares = Replicated::new(
-                                BK::ZERO,
-                                BK::truncate_from(u128::from(breakdownkey)),
-                            );
-                        }
-                        if ctx.role() == h_i_plus_one {
-                            breakdownkey_shares = Replicated::new(
-                                BK::truncate_from(u128::from(breakdownkey)),
-                                BK::ZERO,
-                            );
-                        }
-                        let row = OPRFIPAInputRow {
-                            match_key: match_key_shares,
-                            is_trigger: Replicated::new(Boolean::FALSE, Boolean::FALSE),
-                            breakdown_key: breakdownkey_shares,
-                            trigger_value: Replicated::new(TV::ZERO, TV::ZERO),
-                            timestamp: Replicated::new(TS::ZERO, TS::ZERO),
-                        };
+                        let row = create_aggregation_fake_row::<C, BK, TV, TS, B>(
+                            ctx,
+                            h_i,
+                            h_i_plus_one,
+                            dummy_mk,
+                            breakdownkey,
+                        )?;
                         padding_input_rows.push(row);
                     }
                 }
                 if r == 1 {
-                    // TODO be nice not to have this code below duplicated from above.
-                    let mut match_key_shares: Replicated<BA64> = Replicated::default();
-                    if ctx.role() == h_i {
-                        match_key_shares = Replicated::new(BA64::ZERO, dummy_mk);
-                    }
-                    if ctx.role() == h_i_plus_one {
-                        match_key_shares = Replicated::new(dummy_mk, BA64::ZERO);
-                    }
-
-                    let mut breakdownkey_shares: Replicated<BK> = Replicated::default();
-                    if ctx.role() == h_i {
-                        breakdownkey_shares =
-                            Replicated::new(BK::ZERO, BK::truncate_from(u128::from(breakdownkey)));
-                    }
-                    if ctx.role() == h_i_plus_one {
-                        breakdownkey_shares =
-                            Replicated::new(BK::truncate_from(u128::from(breakdownkey)), BK::ZERO);
-                    }
-                    let row = OPRFIPAInputRow {
-                        match_key: match_key_shares,
-                        is_trigger: Replicated::new(Boolean::FALSE, Boolean::FALSE),
-                        breakdown_key: breakdownkey_shares,
-                        trigger_value: Replicated::new(TV::ZERO, TV::ZERO),
-                        timestamp: Replicated::new(TS::ZERO, TS::ZERO),
-                    };
+                    let row = create_aggregation_fake_row::<C, BK, TV, TS, B>(
+                        ctx,
+                        h_i,
+                        h_i_plus_one,
+                        dummy_mk,
+                        breakdownkey,
+                    )?;
                     padding_input_rows.push(row);
                 }
             }
         }
     }
-
     Ok(total_number_of_fake_rows)
 }
+/// # Errors
+/// no unwraps here so unlikely to propagate an error.
+pub fn create_aggregation_fake_row<C, BK, TV, TS, const B: usize>(
+    ctx: &C,
+    h_i: Role,
+    h_i_plus_one: Role,
+    dummy_mk: BA64,
+    breakdownkey: u32,
+) -> Result<OPRFIPAInputRow<BK, TV, TS>, Error>
+where
+    C: Context,
+    BK: BooleanArray + U128Conversions,
+    TV: BooleanArray,
+    TS: BooleanArray,
+{
+    let mut match_key_shares: Replicated<BA64> = Replicated::default();
+    if ctx.role() == h_i {
+        match_key_shares = Replicated::new(BA64::ZERO, dummy_mk);
+    }
+    if ctx.role() == h_i_plus_one {
+        match_key_shares = Replicated::new(dummy_mk, BA64::ZERO);
+    }
 
-
-// pub fn create_aggregation_fake_row<C, BK, TV, TS, const B: usize>(
-//     ctx: &C,
-//     padding_input_rows: &mut Vec<OPRFIPAInputRow<BK, TV, TS>>,
-//     h_i: Role,
-//     h_i_plus_one: Role,
-// ) // -> Result<OPRFIPAInputRow<BK, TV, TS>, Error>
-// where
-//     C: Context,
-//     BK: BooleanArray + U128Conversions,
-//     TV: BooleanArray,
-//     TS: BooleanArray,
-// {
-// }
+    let mut breakdownkey_shares: Replicated<BK> = Replicated::default();
+    if ctx.role() == h_i {
+        breakdownkey_shares =
+            Replicated::new(BK::ZERO, BK::truncate_from(u128::from(breakdownkey)));
+    }
+    if ctx.role() == h_i_plus_one {
+        breakdownkey_shares =
+            Replicated::new(BK::truncate_from(u128::from(breakdownkey)), BK::ZERO);
+    }
+    let row = OPRFIPAInputRow {
+        match_key: match_key_shares,
+        is_trigger: Replicated::new(Boolean::FALSE, Boolean::FALSE),
+        breakdown_key: breakdownkey_shares,
+        trigger_value: Replicated::new(TV::ZERO, TV::ZERO),
+        timestamp: Replicated::new(TS::ZERO, TS::ZERO),
+    };
+    Ok(row)
+}
 
 #[cfg(all(test, unit_test))]
 mod tests {
@@ -433,7 +419,7 @@ mod tests {
     use crate::{
         error::Error,
         ff::{
-            boolean_array::{BooleanArray, BA32, BA8},
+            boolean_array::{BooleanArray, BA20, BA3, BA32, BA8},
             U128Conversions,
         },
         helpers::{Direction, Role, TotalRecords},
@@ -441,7 +427,8 @@ mod tests {
             context::Context,
             ipa_prf::{
                 oprf_padding::{
-                    apply_dp_padding_pass, insecure, insecure::OPRFPaddingDp, PaddingParameters,
+                    apply_dp_padding_pass, insecure, insecure::OPRFPaddingDp, AggregationPadding,
+                    OPRFPadding, PaddingParameters,
                 },
                 OPRFIPAInputRow,
             },
@@ -452,6 +439,7 @@ mod tests {
 
     pub async fn set_up_apply_dp_padding_pass<C, BK, TV, TS, const B: usize>(
         ctx: C,
+        padding_params: PaddingParameters,
     ) -> Result<Vec<OPRFIPAInputRow<BK, TV, TS>>, Error>
     where
         C: Context,
@@ -466,23 +454,36 @@ mod tests {
             Role::H1,
             Role::H2,
             Role::H3,
-            &PaddingParameters::default(),
+            &padding_params,
         )
         .await?;
         Ok(input)
     }
 
     #[tokio::test]
-    pub async fn test_apply_dp_padding_pass() {
+    pub async fn test_oprf_noise_in_dp_padding_pass() {
         type BK = BA8;
-        type TV = BA8;
-        type TS = BA8;
+        type TV = BA3;
+        type TS = BA20;
         const B: usize = 256;
         let world = TestWorld::default();
+        let oprf_epsilon = 1.0;
+        let oprf_delta = 1e-6;
+        let matchkey_cardinality_cap = 10;
+        let oprf_padding_sensitivity = 2;
 
         let result = world
             .semi_honest((), |ctx, ()| async move {
-                set_up_apply_dp_padding_pass::<_, BK, TV, TS, B>(ctx).await
+                let padding_params = PaddingParameters {
+                    oprf_padding: OPRFPadding::Parameters {
+                        oprf_epsilon,
+                        oprf_delta,
+                        matchkey_cardinality_cap,
+                        oprf_padding_sensitivity,
+                    },
+                    aggregation_padding: AggregationPadding::NoAggPadding,
+                };
+                set_up_apply_dp_padding_pass::<_, BK, TV, TS, B>(ctx, padding_params).await
             })
             .await
             .map(Result::unwrap);
@@ -501,7 +502,7 @@ mod tests {
             assert!(row.timestamp == 0);
             assert!(row.trigger_value == 0);
             assert!(!row.is_trigger_report);
-            // assert!(row.breakdown_key == 0);
+            assert!(row.breakdown_key == 0); // since we set AggregationPadding::NoAggPadding
             assert!(row.user_id != 0);
 
             let count = user_id_counts.entry(row.user_id).or_insert(0);
@@ -521,14 +522,94 @@ mod tests {
             *count += 1;
         }
 
+        let oprf_padding =
+            OPRFPaddingDp::new(oprf_epsilon, oprf_delta, oprf_padding_sensitivity).unwrap();
+
+        let (mean, std_bound) = oprf_padding.mean_and_std_bound();
+        assert!(std_bound > 1.0); // bound on the std only holds if this is true.
+        println!("mean = {mean}, std_bound = {std_bound}");
         for (sample, count) in &distribution_of_samples {
             println!("An OPRFPadding sample value equal to {sample} occurred {count} time(s)",);
+            assert!(
+                (f64::from(*sample) - mean).abs() < 5.0 * std_bound,
+                "aggregation noise sample was not within 5 times the standard deviation bound from what was expected."
+            );
+        }
+    }
+
+    #[tokio::test]
+    pub async fn test_aggregation_noise_in_dp_padding_pass() {
+        type BK = BA8;
+        type TV = BA3;
+        type TS = BA20;
+        const B: usize = 256;
+        let world = TestWorld::default();
+        let aggregation_epsilon = 1.0;
+        let aggregation_delta = 1e-6;
+        let aggregation_padding_sensitivity = 2;
+
+        let result = world
+            .semi_honest((), |ctx, ()| async move {
+                let padding_params = PaddingParameters {
+                    oprf_padding: OPRFPadding::NoOPRFPadding,
+                    aggregation_padding: AggregationPadding::Parameters {
+                        aggregation_epsilon,
+                        aggregation_delta,
+                        aggregation_padding_sensitivity,
+                    },
+                };
+                set_up_apply_dp_padding_pass::<_, BK, TV, TS, B>(ctx, padding_params).await
+            })
+            .await
+            .map(Result::unwrap);
+
+        // check that all three helpers added the same number of dummy shares
+        assert!(result[0].len() == result[1].len() && result[0].len() == result[2].len());
+
+        let result_reconstructed = result.reconstruct();
+
+        // check that all fields besides the matchkey and breakdownkey are zero and matchkey is not zero
+        let mut user_id_counts: HashMap<u64, u32> = HashMap::new();
+        let mut sample_per_breakdown: HashMap<u32, u32> = HashMap::new();
+        for row in result_reconstructed {
+            assert!(row.timestamp == 0);
+            assert!(row.trigger_value == 0);
+            assert!(!row.is_trigger_report);
+            assert!(row.user_id != 0);
+
+            let count = user_id_counts.entry(row.user_id).or_insert(0);
+            *count += 1;
+
+            let sample = sample_per_breakdown.entry(row.breakdown_key).or_insert(0);
+            *sample += 1;
+        }
+        // check that all breakdowns had noise added
+        assert!(B == sample_per_breakdown.len());
+
+        // Now look at now many times a user_id occured
+        let mut number_per_cardinality: BTreeMap<u32, u32> = BTreeMap::new();
+        for cardinality in user_id_counts.values() {
+            let count = number_per_cardinality.entry(*cardinality).or_insert(0);
+            *count += 1;
+            assert!(*cardinality == 1 || *cardinality == 2 || *cardinality == 3);
         }
 
-        // Now look at now many times breakdown keys occured
-        // TODO it will be much easier to assert things about the distribution of dummies
-        // added for aggregation and oprf if they are added separately... I think I should
-        // refactor this into two separate sets of functions.
+        let aggregation_padding = OPRFPaddingDp::new(
+            aggregation_epsilon,
+            aggregation_delta,
+            aggregation_padding_sensitivity,
+        )
+        .unwrap();
+
+        let (mean, std_bound) = aggregation_padding.mean_and_std_bound();
+        assert!(std_bound > 1.0); // bound on the std only holds if this is true.
+        println!("mean = {mean}, std_bound = {std_bound}");
+        for sample in sample_per_breakdown.values() {
+            assert!(
+                (f64::from(*sample) - mean).abs() < 5.0 * std_bound,
+                "aggregation noise sample was not within 5 times the standard deviation bound from what was expected."
+            );
+        }
     }
 
     /// # Errors
@@ -579,7 +660,6 @@ mod tests {
         if ctx.role() == Role::H1 {
             let send_channel = send_ctx.send_channel::<BA32>(send_ctx.role().peer(Direction::Left));
             let _ = send_channel.send(RecordId::FIRST, num_fake_rows).await;
-            // send_channel.close(RecordId::FIRST).await;
         }
 
         if ctx.role() == Role::H3 {

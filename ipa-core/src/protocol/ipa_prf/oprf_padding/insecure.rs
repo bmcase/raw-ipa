@@ -246,6 +246,17 @@ impl OPRFPaddingDp {
     pub fn sample<R: RngCore + CryptoRng>(&self, rng: &mut R) -> u32 {
         self.truncated_double_geometric.sample(rng)
     }
+
+    /// Returns the mean and an upper bound on the standard deviation of the `OPRFPaddingDp` distribution
+    /// The upper bound is valid if the standard deviation is greater than 1.
+    /// see `oprf_padding/README.md`
+    pub fn mean_and_std_bound(&self) -> (f64, f64) {
+        let mean = f64::from(self.truncated_double_geometric.shift_doubled) / 2.0;
+        let s = 1.0 / self.epsilon;
+        let p = 1.0 - E.powf(-1.0 / s);
+        let std_bound = (2.0 * (1.0 - p) / pow_u32(p, 2)).sqrt();
+        (mean, std_bound)
+    }
 }
 
 #[cfg(all(test, unit_test))]
