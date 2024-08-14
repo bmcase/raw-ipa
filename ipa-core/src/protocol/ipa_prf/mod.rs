@@ -92,7 +92,9 @@ use step::IpaPrfStep as Step;
 
 use crate::{
     helpers::query::DpMechanism,
-    protocol::{context::Validator, dp::dp_for_histogram},
+    protocol::{
+        context::Validator, dp::dp_for_histogram, ipa_prf::oprf_padding::PaddingParameters,
+    },
 };
 
 #[derive(Clone, Debug, Default)]
@@ -249,8 +251,12 @@ where
     }
 
     // Apply DP padding
-    let padded_input_rows =
-        apply_dp_padding::<_, BK, TV, TS, B>(ctx.narrow(&Step::PaddingDp), input_rows).await?;
+    let padded_input_rows = apply_dp_padding::<_, BK, TV, TS, B>(
+        ctx.narrow(&Step::PaddingDp),
+        input_rows,
+        PaddingParameters::default(),
+    )
+    .await?;
 
     // then use input_rows_added instead of input_rows below
     // TODO
