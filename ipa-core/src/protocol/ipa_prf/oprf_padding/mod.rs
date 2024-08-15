@@ -31,11 +31,13 @@ use crate::{
     },
 };
 
-#[derive(Default)]
+#[derive(Default, Copy, Clone, Debug)]
 pub struct PaddingParameters {
-    aggregation_padding: AggregationPadding,
-    oprf_padding: OPRFPadding,
+    pub(crate) aggregation_padding: AggregationPadding,
+    pub(crate) oprf_padding: OPRFPadding,
 }
+
+#[derive(Copy, Clone, Debug)]
 pub enum AggregationPadding {
     NoAggPadding,
     Parameters {
@@ -44,6 +46,8 @@ pub enum AggregationPadding {
         aggregation_padding_sensitivity: u32,
     },
 }
+
+#[derive(Copy, Clone, Debug)]
 pub enum OPRFPadding {
     NoOPRFPadding,
     Parameters {
@@ -57,9 +61,9 @@ pub enum OPRFPadding {
 impl Default for AggregationPadding {
     fn default() -> Self {
         AggregationPadding::Parameters {
-            aggregation_epsilon: 1.0,
-            aggregation_delta: 1e-6,
-            aggregation_padding_sensitivity: 2,
+            aggregation_epsilon: 10.0,
+            aggregation_delta: 1e-4,            //1e-6,
+            aggregation_padding_sensitivity: 2, // TODO set larger
         }
     }
 }
@@ -67,10 +71,37 @@ impl Default for AggregationPadding {
 impl Default for OPRFPadding {
     fn default() -> Self {
         OPRFPadding::Parameters {
-            oprf_epsilon: 1.0,
-            oprf_delta: 1e-6,
-            matchkey_cardinality_cap: 10,
-            oprf_padding_sensitivity: 2,
+            oprf_epsilon: 10.0,
+            oprf_delta: 1e-4,            //1e-6,
+            matchkey_cardinality_cap: 2, //10,
+            oprf_padding_sensitivity: 2, // should remain 2
+        }
+    }
+}
+
+impl PaddingParameters {
+    #[must_use]
+    pub fn relaxed() -> Self {
+        PaddingParameters {
+            aggregation_padding: AggregationPadding::Parameters {
+                aggregation_epsilon: 5.0,
+                aggregation_delta: 1e-3,
+                aggregation_padding_sensitivity: 3,
+            },
+            oprf_padding: OPRFPadding::Parameters {
+                oprf_epsilon: 5.0,
+                oprf_delta: 1e-3,
+                matchkey_cardinality_cap: 3,
+                oprf_padding_sensitivity: 2,
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn no_padding() -> Self {
+        PaddingParameters {
+            aggregation_padding: AggregationPadding::NoAggPadding,
+            oprf_padding: OPRFPadding::NoOPRFPadding,
         }
     }
 }
@@ -599,8 +630,6 @@ mod tests {
             );
         }
     }
-
-
 
     /// # Errors
     /// Will propogate errors from `OPRFPaddingDp`
