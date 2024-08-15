@@ -251,16 +251,13 @@ where
         return Ok(vec![Replicated::ZERO; B]);
     }
 
-    // Apply DP padding
+    // Apply DP padding for OPRF and new Aggregation
     let padded_input_rows = apply_dp_padding::<_, BK, TV, TS, B>(
         ctx.narrow(&Step::PaddingDp),
         input_rows,
         dp_padding_params,
     )
     .await?;
-
-    // then use input_rows_added instead of input_rows below
-    // TODO
 
     let shuffled = shuffle_inputs(ctx.narrow(&Step::Shuffle), padded_input_rows).await?;
     let mut prfd_inputs = compute_prf_for_inputs(ctx.clone(), &shuffled).await?;

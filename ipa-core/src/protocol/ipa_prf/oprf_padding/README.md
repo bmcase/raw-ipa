@@ -81,4 +81,4 @@ Because these rows can be dropped after matching and never have the fake breakdo
 the number of breakdowns per user. Otherwise, those breakdown keys would never be revealed as they will be dropped.
 
 Instead of this approach we will the fake rows for matchkey padding first and then the fake rows for breakdown key padding. When
-we generate the fake rows for breakdown key padding, the fake matchkeys generated will all have cardinality two.
+we generate the fake rows for breakdown key padding, the fake matchkeys generated will all have cardinality two or three (and with small probability one).

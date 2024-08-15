@@ -31,10 +31,11 @@ use crate::{
     },
 };
 
+/// Parameter struct for padding parameters.
 #[derive(Default, Copy, Clone, Debug)]
 pub struct PaddingParameters {
-    pub(crate) aggregation_padding: AggregationPadding,
-    pub(crate) oprf_padding: OPRFPadding,
+    pub aggregation_padding: AggregationPadding,
+    pub oprf_padding: OPRFPadding,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -61,9 +62,10 @@ pub enum OPRFPadding {
 impl Default for AggregationPadding {
     fn default() -> Self {
         AggregationPadding::Parameters {
-            aggregation_epsilon: 10.0,
-            aggregation_delta: 1e-4,            //1e-6,
-            aggregation_padding_sensitivity: 2, // TODO set larger
+            aggregation_epsilon: 5.0,
+            aggregation_delta: 1e-6,
+            aggregation_padding_sensitivity: 10, // for IPA is most natural to set
+                                                 // equal to the matchkey_cardinality_cap
         }
     }
 }
@@ -71,9 +73,9 @@ impl Default for AggregationPadding {
 impl Default for OPRFPadding {
     fn default() -> Self {
         OPRFPadding::Parameters {
-            oprf_epsilon: 10.0,
-            oprf_delta: 1e-4,            //1e-6,
-            matchkey_cardinality_cap: 2, //10,
+            oprf_epsilon: 5.0,
+            oprf_delta: 1e-6,
+            matchkey_cardinality_cap: 10,
             oprf_padding_sensitivity: 2, // should remain 2
         }
     }
@@ -84,13 +86,13 @@ impl PaddingParameters {
     pub fn relaxed() -> Self {
         PaddingParameters {
             aggregation_padding: AggregationPadding::Parameters {
-                aggregation_epsilon: 5.0,
-                aggregation_delta: 1e-3,
+                aggregation_epsilon: 10.0,
+                aggregation_delta: 1e-4,
                 aggregation_padding_sensitivity: 3,
             },
             oprf_padding: OPRFPadding::Parameters {
-                oprf_epsilon: 5.0,
-                oprf_delta: 1e-3,
+                oprf_epsilon: 10.0,
+                oprf_delta: 1e-4,
                 matchkey_cardinality_cap: 3,
                 oprf_padding_sensitivity: 2,
             },
@@ -188,8 +190,6 @@ where
     assert!(h_i != h_out);
     assert!(h_out != h_i_plus_one);
 
-    // let matchkey_cardinality_cap = 10; // set by assumptions on capping that either happens on the device or is heuristic in IPA.
-    // let oprf_padding_sensitivity = 2; // since using replacement neighboring definition
     let mut total_number_of_fake_rows = 0;
     let mut padding_input_rows: Vec<OPRFIPAInputRow<BK, TV, TS>> = Vec::new();
 
@@ -631,6 +631,8 @@ mod tests {
         }
     }
 
+    /// Below tests are for more foundational components used in building padding.
+
     /// # Errors
     /// Will propogate errors from `OPRFPaddingDp`
     pub fn sample_shared_randomness<C>(ctx: &C) -> Result<u32, insecure::Error>
@@ -660,6 +662,7 @@ mod tests {
                 |ctx, ()| async move { sample_shared_randomness::<_>(&ctx) },
             )
             .await;
+        assert!(result[0] == result[1]); // H1 and H2 should agree
         println!("result = {result:?}",);
     }
 
@@ -698,7 +701,9 @@ mod tests {
         let result = world
             .semi_honest((), |ctx, ()| async move { send_to_helper::<_>(ctx).await })
             .await;
-        // .map(Result::unwrap);
         println!("result = {result:?}",);
+        let value_h1 = result[0].as_ref().expect("Failed to get result for H1");
+        let value_h3 = result[2].as_ref().expect("Failed to get result for H3");
+        assert_eq!(value_h1, value_h3, "H1 and H3 should agree");
     }
 }
