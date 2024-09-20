@@ -76,9 +76,9 @@ impl Default for AggregationPadding {
 impl Default for OPRFPadding {
     fn default() -> Self {
         OPRFPadding::Parameters {
-            oprf_epsilon: 5.0,
+            oprf_epsilon: 8.0,
             oprf_delta: 1e-6,
-            matchkey_cardinality_cap: 10,
+            matchkey_cardinality_cap: 5,
             oprf_padding_sensitivity: 2, // should remain 2
         }
     }
